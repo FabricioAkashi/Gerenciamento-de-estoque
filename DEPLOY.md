@@ -12,6 +12,12 @@ Em uma plataforma como Render ou Railway, crie um servico web usando esta pasta 
 npm install && npm run build
 ```
 
+Alternativa equivalente no Render:
+
+```bash
+npm run render-build
+```
+
 ### Start command
 
 ```bash

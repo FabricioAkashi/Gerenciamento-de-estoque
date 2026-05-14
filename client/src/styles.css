@@ -257,6 +257,24 @@ td span {
   color: #b33b1f;
 }
 
+.table-action {
+  align-items: center;
+  border: 1px solid #dbe3da;
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.table-action.danger {
+  background: #fff4f1;
+  border-color: #ffc9bd;
+  color: #a12a19;
+}
+
 .tabs,
 .movement-options {
   display: grid;

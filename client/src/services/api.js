@@ -34,6 +34,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(produto)
     }),
+  removerProduto: (id) =>
+    request(`/produtos/${id}`, {
+      method: 'DELETE'
+    }),
   listarCategorias: () => request('/categorias'),
   criarCategoria: (categoria) =>
     request('/categorias', {

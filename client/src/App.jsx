@@ -9,6 +9,7 @@ import {
   Save,
   Search,
   SlidersHorizontal,
+  Trash2,
   Truck
 } from 'lucide-react';
 import React from 'react';
@@ -204,6 +205,16 @@ export default function App() {
     setMovimentacao(movimentacaoInicial);
   }
 
+  async function removerProduto(item) {
+    const confirmou = window.confirm(`Remover "${item.nome}" do estoque?`);
+
+    if (!confirmou) {
+      return;
+    }
+
+    await executarAcao(() => api.removerProduto(item._id), 'Produto removido do estoque.');
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -266,6 +277,7 @@ export default function App() {
                   <th>Min.</th>
                   <th>Valor</th>
                   <th>Status</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody>
@@ -285,6 +297,17 @@ export default function App() {
                         {item.emAlerta ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
                         {item.emAlerta ? 'Alerta' : 'OK'}
                       </span>
+                    </td>
+                    <td>
+                      <button
+                        className="table-action danger"
+                        onClick={() => removerProduto(item)}
+                        title="Remover produto"
+                        type="button"
+                      >
+                        <Trash2 size={15} />
+                        Remover
+                      </button>
                     </td>
                   </tr>
                 ))}

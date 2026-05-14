@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import morgan from 'morgan';
@@ -18,16 +19,26 @@ const clientDistPath = path.resolve(__dirname, '../../client/dist');
 export function createApp() {
   const app = express();
 
-  app.use(
-    cors({
-      origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173'
-    })
-  );
+  const corsOptions =
+    process.env.NODE_ENV === 'production'
+      ? {}
+      : { origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' };
+
+  app.use(cors(corsOptions));
   app.use(express.json());
   app.use(morgan('dev'));
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
+  });
+
+  app.get('/api/deploy-check', (req, res) => {
+    res.json({
+      status: 'ok',
+      clientDistPath,
+      indexExists: fs.existsSync(path.join(clientDistPath, 'index.html')),
+      nodeEnv: process.env.NODE_ENV || 'development'
+    });
   });
 
   app.use('/api/dashboard', dashboardRouter);
