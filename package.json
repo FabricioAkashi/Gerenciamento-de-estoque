@@ -1,0 +1,22 @@
+{
+  "name": "estoque-lanchonete",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplicacao web para gestao de estoque de uma lanchonete.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace server\" \"npm run dev --workspace client\"",
+    "build": "npm run build --workspace client",
+    "start": "npm run start --workspace server",
+    "install:all": "npm install --workspaces"
+  },
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

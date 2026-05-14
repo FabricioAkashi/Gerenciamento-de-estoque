@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Estoque da Lanchonete</title>
+    <script>
+      window.addEventListener('error', function (event) {
+        var root = document.getElementById('root');
+        if (!root || root.dataset.reactLoaded === 'true') return;
+        root.innerHTML =
+          '<main style="font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 24px; border: 1px solid #ffd0c6; border-radius: 8px; color: #202124;">' +
+          '<h1 style="font-size: 24px; color: #a12a19;">Erro ao abrir o painel</h1>' +
+          '<p>O navegador nao conseguiu carregar a aplicacao React.</p>' +
+          '<pre style="white-space: pre-wrap; background: #fff4f1; padding: 12px; border-radius: 8px;">' +
+          (event.message || 'Erro desconhecido') +
+          '</pre>' +
+          '</main>';
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <main style="font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 24px; border: 1px solid #dfe6de; border-radius: 8px; color: #202124;">
+        <h1 style="font-size: 24px; margin: 0 0 12px;">Carregando painel de estoque...</h1>
+        <p style="margin: 0;">Se essa mensagem nao sair da tela, o JavaScript do React nao carregou.</p>
+      </main>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
