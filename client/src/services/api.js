@@ -1,12 +1,36 @@
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+const TOKEN_KEY = 'estoque-auth-token';
+
+let authToken = window.localStorage.getItem(TOKEN_KEY) || '';
+
+export function setAuthToken(token) {
+  authToken = token || '';
+
+  if (authToken) {
+    window.localStorage.setItem(TOKEN_KEY, authToken);
+    return;
+  }
+
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getAuthToken() {
+  return authToken;
+}
 
 async function request(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers
+  };
+
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
   const response = await fetch(`${API_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    ...options
+    ...options,
+    headers
   });
 
   if (!response.ok) {
@@ -22,6 +46,29 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  authStatus: () => request('/auth/status'),
+  setupAdmin: (dados) =>
+    request('/auth/setup', {
+      method: 'POST',
+      body: JSON.stringify(dados)
+    }),
+  login: (dados) =>
+    request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(dados)
+    }),
+  perfil: () => request('/auth/me'),
+  listarUsuarios: () => request('/auth/usuarios'),
+  criarUsuario: (usuario) =>
+    request('/auth/usuarios', {
+      method: 'POST',
+      body: JSON.stringify(usuario)
+    }),
+  atualizarUsuario: (id, usuario) =>
+    request(`/auth/usuarios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(usuario)
+    }),
   dashboard: () => request('/dashboard'),
   listarProdutos: () => request('/produtos'),
   criarProduto: (produto) =>

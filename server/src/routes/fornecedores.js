@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAdmin } from '../middleware/auth.js';
 import { Fornecedor } from '../models/Fornecedor.js';
 
 const router = Router();
@@ -12,7 +13,7 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   try {
     const fornecedor = await Fornecedor.create(req.body);
     res.status(201).json(fornecedor);
@@ -21,7 +22,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireAdmin, async (req, res, next) => {
   try {
     const fornecedor = await Fornecedor.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -38,7 +39,7 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {
     const fornecedor = await Fornecedor.findByIdAndDelete(req.params.id);
 

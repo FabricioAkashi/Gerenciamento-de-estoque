@@ -4,13 +4,17 @@ import {
   ArrowUp,
   Boxes,
   CheckCircle2,
+  LogOut,
   Moon,
+  ShieldCheck,
   PackagePlus,
   RefreshCw,
   Save,
   Search,
   SlidersHorizontal,
   Sun,
+  UserPlus,
+  Users,
   Trash2,
   X,
   Truck
@@ -19,7 +23,7 @@ import React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from './components/EmptyState.jsx';
 import { MetricCard } from './components/MetricCard.jsx';
-import { api } from './services/api.js';
+import { api, getAuthToken, setAuthToken } from './services/api.js';
 
 const produtoInicial = {
   nome: '',
@@ -46,6 +50,15 @@ const movimentacaoInicial = {
   quantidade: 1,
   usuario: 'Operador',
   observacao: ''
+};
+const loginInicial = { nome: '', email: '', senha: '' };
+const usuarioInicial = {
+  nome: '',
+  email: '',
+  senha: '',
+  papel: 'operador',
+  ativo: true,
+  senhaConfirmacao: ''
 };
 
 function moeda(valor) {
@@ -98,6 +111,15 @@ export default function App() {
   const [resumoAberto, setResumoAberto] = useState(false);
   const [periodoResumo, setPeriodoResumo] = useState('dia');
   const [tema, setTema] = useState(temaInicial);
+  const [usuarioLogado, setUsuarioLogado] = useState(null);
+  const [authCarregando, setAuthCarregando] = useState(true);
+  const [setupNecessario, setSetupNecessario] = useState(false);
+  const [loginForm, setLoginForm] = useState(loginInicial);
+  const [usuarios, setUsuarios] = useState([]);
+  const [usuarioForm, setUsuarioForm] = useState(usuarioInicial);
+  const [usuarioEditando, setUsuarioEditando] = useState(null);
+
+  const admin = usuarioLogado?.papel === 'admin';
 
   async function carregarDados() {
     setCarregando(true);
@@ -144,15 +166,132 @@ export default function App() {
 
     setCarregando(false);
   }
+  async function carregarUsuarios() {
+    if (!admin) {
+      return;
+    }
+
+    const lista = await api.listarUsuarios();
+    setUsuarios(lista);
+  }
+
+  async function autenticar(event) {
+    event.preventDefault();
+    setErro('');
+    setMensagem('');
+    setSalvando(true);
+
+    try {
+      const resposta = setupNecessario
+        ? await api.setupAdmin(loginForm)
+        : await api.login({ email: loginForm.email, senha: loginForm.senha });
+
+      setAuthToken(resposta.token);
+      setUsuarioLogado(resposta.usuario);
+      setSetupNecessario(false);
+      setLoginForm(loginInicial);
+      setMensagem(setupNecessario ? 'Administrador criado com sucesso.' : 'Login realizado.');
+      await carregarDados();
+    } catch (error) {
+      setErro(error.message);
+    } finally {
+      setAuthCarregando(false);
+      setSalvando(false);
+    }
+  }
+
+  function sair() {
+    setAuthToken('');
+    setUsuarioLogado(null);
+    setDashboard(null);
+    setProdutos([]);
+    setCategorias([]);
+    setFornecedores([]);
+    setMovimentacoes([]);
+    setUsuarios([]);
+    setMensagem('');
+    setErro('');
+    api.authStatus().then((status) => setSetupNecessario(status.setupNecessario)).catch(() => {});
+  }
+
+  async function salvarUsuario(event) {
+    event.preventDefault();
+    setErro('');
+    setMensagem('');
+    setSalvando(true);
+
+    try {
+      if (usuarioEditando) {
+        await api.atualizarUsuario(usuarioEditando._id, usuarioForm);
+        setMensagem('Usuario atualizado.');
+      } else {
+        await api.criarUsuario(usuarioForm);
+        setMensagem('Usuario cadastrado.');
+      }
+
+      setUsuarioForm(usuarioInicial);
+      setUsuarioEditando(null);
+      await carregarUsuarios();
+    } catch (error) {
+      setErro(error.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function editarUsuario(item) {
+    setUsuarioEditando(item);
+    setUsuarioForm({
+      nome: item.nome,
+      email: item.email,
+      senha: '',
+      papel: item.papel,
+      ativo: item.ativo,
+      senhaConfirmacao: ''
+    });
+  }
+
+  function cancelarEdicaoUsuario() {
+    setUsuarioEditando(null);
+    setUsuarioForm(usuarioInicial);
+  }
 
   useEffect(() => {
-    carregarDados();
+    async function iniciarSessao() {
+      setAuthCarregando(true);
+      setErro('');
+
+      try {
+        if (getAuthToken()) {
+          const perfil = await api.perfil();
+          setUsuarioLogado(perfil);
+          await carregarDados();
+          return;
+        }
+
+        const status = await api.authStatus();
+        setSetupNecessario(status.setupNecessario);
+      } catch (error) {
+        setAuthToken('');
+        setErro(error.message);
+      } finally {
+        setAuthCarregando(false);
+      }
+    }
+
+    iniciarSessao();
   }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = tema;
     window.localStorage.setItem('tema-estoque', tema);
   }, [tema]);
+
+  useEffect(() => {
+    if (admin) {
+      carregarUsuarios().catch((error) => setErro(error.message));
+    }
+  }, [admin]);
 
   useEffect(() => {
     function fecharComEsc(event) {
@@ -369,6 +508,76 @@ export default function App() {
     );
   }
 
+  if (authCarregando) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <ShieldCheck size={28} />
+          <h1>Carregando acesso</h1>
+          <p>Conferindo a sessao do sistema.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!usuarioLogado) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <div className="auth-header">
+            <ShieldCheck size={30} />
+            <div>
+              <span className="eyebrow">Acesso seguro</span>
+              <h1>{setupNecessario ? 'Criar administrador' : 'Entrar no estoque'}</h1>
+            </div>
+          </div>
+
+          {erro && <div className="notice notice-error">{erro}</div>}
+          {mensagem && <div className="notice notice-success">{mensagem}</div>}
+
+          <form className="form" onSubmit={autenticar}>
+            {setupNecessario && (
+              <label>
+                Nome do administrador
+                <input
+                  required
+                  value={loginForm.nome}
+                  onChange={(event) => setLoginForm({ ...loginForm, nome: event.target.value })}
+                  placeholder="Ex.: Administrador"
+                />
+              </label>
+            )}
+            <label>
+              Email
+              <input
+                required
+                type="email"
+                value={loginForm.email}
+                onChange={(event) => setLoginForm({ ...loginForm, email: event.target.value })}
+                placeholder="admin@email.com"
+              />
+            </label>
+            <label>
+              Senha
+              <input
+                required
+                minLength={6}
+                type="password"
+                value={loginForm.senha}
+                onChange={(event) => setLoginForm({ ...loginForm, senha: event.target.value })}
+                placeholder="Minimo 6 caracteres"
+              />
+            </label>
+            <button className="primary-button" disabled={salvando} type="submit">
+              <ShieldCheck size={17} />
+              {setupNecessario ? 'Criar admin' : 'Entrar'}
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -377,6 +586,11 @@ export default function App() {
           <h1>Gestao de Estoque</h1>
         </div>
         <div className="topbar-actions">
+          <div className="user-badge">
+            <ShieldCheck size={16} />
+            <span>{usuarioLogado.nome}</span>
+            <strong>{usuarioLogado.papel === 'admin' ? 'Admin' : 'Operador'}</strong>
+          </div>
           <button
             className="theme-switch"
             onClick={() => setTema((atual) => (atual === 'claro' ? 'escuro' : 'claro'))}
@@ -386,8 +600,11 @@ export default function App() {
             {tema === 'claro' ? <Moon size={17} /> : <Sun size={17} />}
             <span>{tema === 'claro' ? 'Escuro' : 'Claro'}</span>
           </button>
-          <button className="icon-button" onClick={carregarDados} title="Atualizar dados">
+          <button className="icon-button" onClick={carregarDados} title="Atualizar dados" type="button">
             <RefreshCw size={18} />
+          </button>
+          <button className="icon-button" onClick={sair} title="Sair" type="button">
+            <LogOut size={18} />
           </button>
         </div>
       </header>
@@ -442,7 +659,7 @@ export default function App() {
                   <th>Min.</th>
                   <th>Valor</th>
                   <th>Status</th>
-                  <th>Acoes</th>
+                  {admin && <th>Acoes</th>}
                 </tr>
               </thead>
               <tbody>
@@ -453,24 +670,28 @@ export default function App() {
                       <span>{item.unidadeMedida}</span>
                     </td>
                     <td>
-                      <select
-                        className="table-select"
-                        onChange={(event) => alterarCategoriaProduto(item, event.target.value)}
-                        title="Alterar categoria"
-                        value={item.categoria?._id || item.categoria || ''}
-                      >
-                        {categorias.map((categoriaItem) => (
-                          <option key={categoriaItem._id} value={categoriaItem._id}>
-                            {categoriaItem.nome}
-                          </option>
-                        ))}
-                      </select>
+                      {admin ? (
+                        <select
+                          className="table-select"
+                          onChange={(event) => alterarCategoriaProduto(item, event.target.value)}
+                          title="Alterar categoria"
+                          value={item.categoria?._id || item.categoria || ''}
+                        >
+                          {categorias.map((categoriaItem) => (
+                            <option key={categoriaItem._id} value={categoriaItem._id}>
+                              {categoriaItem.nome}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        item.categoria?.nome || '-'
+                      )}
                     </td>
                     <td>{item.fornecedor?.nome || '-'}</td>
                     <td>{numero(item.quantidadeAtual)}</td>
                     <td>{numero(item.estoqueMinimo)}</td>
                     <td>
-                      {precoEmEdicao?.id === item._id ? (
+                      {admin && precoEmEdicao?.id === item._id ? (
                         <input
                           autoFocus
                           className="inline-price-input"
@@ -484,7 +705,7 @@ export default function App() {
                           type="number"
                           value={precoEmEdicao.valor}
                         />
-                      ) : (
+                      ) : admin ? (
                         <button
                           className="editable-value"
                           onClick={() => iniciarEdicaoPreco(item)}
@@ -493,6 +714,8 @@ export default function App() {
                         >
                           {moeda(item.precoUnitario)}
                         </button>
+                      ) : (
+                        moeda(item.precoUnitario)
                       )}
                     </td>
                     <td>
@@ -501,17 +724,19 @@ export default function App() {
                         {item.emAlerta ? 'Alerta' : 'OK'}
                       </span>
                     </td>
-                    <td>
-                      <button
-                        className="table-action danger"
-                        onClick={() => removerProduto(item)}
-                        title="Remover produto"
-                        type="button"
-                      >
-                        <Trash2 size={15} />
-                        Remover
-                      </button>
-                    </td>
+                    {admin && (
+                      <td>
+                        <button
+                          className="table-action danger"
+                          onClick={() => removerProduto(item)}
+                          title="Remover produto"
+                          type="button"
+                        >
+                          <Trash2 size={15} />
+                          Remover
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -526,6 +751,7 @@ export default function App() {
           )}
         </div>
 
+        {admin && (
         <aside className="panel">
           <div className="panel-header">
             <div>
@@ -731,6 +957,7 @@ export default function App() {
             </form>
           )}
         </aside>
+        )}
       </section>
 
       <section className="panel supplier-panel">
@@ -786,6 +1013,136 @@ export default function App() {
           />
         )}
       </section>
+
+      {admin && (
+        <section className="panel users-panel">
+          <div className="panel-header">
+            <div>
+              <span className="eyebrow">Administracao</span>
+              <h2>Usuarios do sistema</h2>
+            </div>
+            <Users size={20} />
+          </div>
+
+          <div className="users-grid">
+            <form className="form" onSubmit={salvarUsuario}>
+              <div className="form-row">
+                <label>
+                  Nome
+                  <input
+                    required
+                    value={usuarioForm.nome}
+                    onChange={(event) => setUsuarioForm({ ...usuarioForm, nome: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    required
+                    type="email"
+                    value={usuarioForm.email}
+                    onChange={(event) => setUsuarioForm({ ...usuarioForm, email: event.target.value })}
+                  />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Perfil
+                  <select
+                    value={usuarioForm.papel}
+                    onChange={(event) => setUsuarioForm({ ...usuarioForm, papel: event.target.value })}
+                  >
+                    <option value="operador">Operador</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                <label>
+                  Senha {usuarioEditando ? 'nova' : ''}
+                  <input
+                    required={!usuarioEditando}
+                    minLength={6}
+                    type="password"
+                    value={usuarioForm.senha}
+                    onChange={(event) => setUsuarioForm({ ...usuarioForm, senha: event.target.value })}
+                    placeholder={usuarioEditando ? 'Deixe em branco para manter' : 'Minimo 6 caracteres'}
+                  />
+                </label>
+              </div>
+              {usuarioEditando && (
+                <>
+                  <label className="checkbox-row">
+                    <input
+                      checked={usuarioForm.ativo}
+                      onChange={(event) =>
+                        setUsuarioForm({ ...usuarioForm, ativo: event.target.checked })
+                      }
+                      type="checkbox"
+                    />
+                    Usuario ativo
+                  </label>
+                  <label>
+                    Sua senha de admin
+                    <input
+                      required
+                      type="password"
+                      value={usuarioForm.senhaConfirmacao}
+                      onChange={(event) =>
+                        setUsuarioForm({ ...usuarioForm, senhaConfirmacao: event.target.value })
+                      }
+                      placeholder="Obrigatoria para alterar login"
+                    />
+                  </label>
+                </>
+              )}
+              <div className="form-actions">
+                <button className="primary-button" disabled={salvando} type="submit">
+                  <UserPlus size={17} />
+                  {usuarioEditando ? 'Salvar usuario' : 'Cadastrar usuario'}
+                </button>
+                {usuarioEditando && (
+                  <button className="secondary-button" onClick={cancelarEdicaoUsuario} type="button">
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </form>
+
+            <div className="table-wrap users-table-wrap">
+              <table className="compact-table">
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Perfil</th>
+                    <th>Status</th>
+                    <th>Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usuarios.map((item) => (
+                    <tr key={item._id}>
+                      <td>
+                        <strong>{item.nome}</strong>
+                        <span>{item.email}</span>
+                      </td>
+                      <td>{item.papel === 'admin' ? 'Admin' : 'Operador'}</td>
+                      <td>
+                        <span className={`status ${item.ativo ? 'ok' : 'danger'}`}>
+                          {item.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td>
+                        <button className="table-action" onClick={() => editarUsuario(item)} type="button">
+                          Editar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="bottom-grid">
         <div className="panel">

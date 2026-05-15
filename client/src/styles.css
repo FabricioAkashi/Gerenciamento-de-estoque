@@ -29,6 +29,90 @@ button {
   cursor: pointer;
 }
 
+
+.auth-shell {
+  align-items: center;
+  display: grid;
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.auth-card {
+  background: #fff;
+  border: 1px solid #dfe6de;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(24, 38, 30, 0.12);
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 460px;
+  padding: 24px;
+  width: 100%;
+}
+
+.auth-card p {
+  color: #5d6b62;
+  margin: 0;
+}
+
+.auth-header {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.user-badge {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe6de;
+  border-radius: 8px;
+  color: #405046;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.user-badge span,
+.user-badge strong {
+  font-size: 0.86rem;
+}
+
+.user-badge strong {
+  color: #1f5d46;
+}
+
+.users-panel {
+  margin-bottom: 16px;
+}
+
+.users-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr);
+  margin-top: 18px;
+}
+
+.users-table-wrap {
+  margin-top: 0;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.checkbox-row input {
+  min-height: auto;
+  width: auto;
+}
 .app-shell {
   width: min(1440px, 100%);
   margin: 0 auto;
@@ -746,7 +830,91 @@ textarea:focus {
 }
 
 @media (max-width: 700px) {
-  .app-shell {
+  
+.auth-shell {
+  align-items: center;
+  display: grid;
+  min-height: 100vh;
+  padding: 22px;
+}
+
+.auth-card {
+  background: #fff;
+  border: 1px solid #dfe6de;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(24, 38, 30, 0.12);
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 460px;
+  padding: 24px;
+  width: 100%;
+}
+
+.auth-card p {
+  color: #5d6b62;
+  margin: 0;
+}
+
+.auth-header {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.user-badge {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe6de;
+  border-radius: 8px;
+  color: #405046;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.user-badge span,
+.user-badge strong {
+  font-size: 0.86rem;
+}
+
+.user-badge strong {
+  color: #1f5d46;
+}
+
+.users-panel {
+  margin-bottom: 16px;
+}
+
+.users-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.22fr);
+  margin-top: 18px;
+}
+
+.users-table-wrap {
+  margin-top: 0;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.checkbox-row input {
+  min-height: auto;
+  width: auto;
+}
+.app-shell {
     padding: 18px;
   }
 
@@ -760,6 +928,7 @@ textarea:focus {
   }
 
   .metrics-grid,
+  .users-grid,
   .form-row,
   .tabs,
   .movement-options,
@@ -805,6 +974,8 @@ textarea:focus {
   color: #9dad9f;
 }
 
+[data-theme='escuro'] .auth-card,
+[data-theme='escuro'] .user-badge,
 [data-theme='escuro'] .panel,
 [data-theme='escuro'] .metric,
 [data-theme='escuro'] .modal-card,
@@ -868,10 +1039,12 @@ textarea:focus {
   border-bottom-color: #2a3931;
 }
 
-[data-theme='escuro'] .editable-value {
+[data-theme='escuro'] .editable-value,
+[data-theme='escuro'] .user-badge strong {
   color: #7ad89f;
 }
 
+[data-theme='escuro'] .auth-card p,
 [data-theme='escuro'] .timeline-item p,
 [data-theme='escuro'] .detail-note p,
 [data-theme='escuro'] .fatal-error p,
@@ -916,6 +1089,7 @@ textarea:focus {
 
 @media (max-width: 700px) {
   .topbar-actions {
+    flex-wrap: wrap;
     width: 100%;
   }
 

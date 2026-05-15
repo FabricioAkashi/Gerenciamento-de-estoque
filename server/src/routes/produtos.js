@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AlertaEstoque } from '../models/AlertaEstoque.js';
+import { requireAdmin } from '../middleware/auth.js';
 import { Produto } from '../models/Produto.js';
 
 const router = Router();
@@ -58,7 +59,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   try {
     const produto = await Produto.create(req.body);
     await sincronizarAlerta(produto);
@@ -70,7 +71,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireAdmin, async (req, res, next) => {
   try {
     const produto = await Produto.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -89,7 +90,7 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {
     const produto = await Produto.findByIdAndUpdate(
       req.params.id,
