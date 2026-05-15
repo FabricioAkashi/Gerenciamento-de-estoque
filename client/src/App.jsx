@@ -10,6 +10,7 @@ import {
   Search,
   SlidersHorizontal,
   Trash2,
+  X,
   Truck
 } from 'lucide-react';
 import React from 'react';
@@ -30,6 +31,12 @@ const produtoInicial = {
 
 const categoriaInicial = { nome: '', descricao: '' };
 const fornecedorInicial = { nome: '', cnpj: '', telefone: '', email: '', endereco: '' };
+const LIMITE_MOVIMENTACOES_VISIVEIS = 6;
+const PERIODOS_RESUMO = {
+  dia: { label: '1 dia', dias: 1 },
+  semana: { label: '1 semana', dias: 7 },
+  mes: { label: '1 mes', dias: 30 }
+};
 const movimentacaoInicial = {
   produto: '',
   tipo: 'entrada',
@@ -72,6 +79,12 @@ export default function App() {
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState('');
   const [erro, setErro] = useState('');
+  const [precoEmEdicao, setPrecoEmEdicao] = useState(null);
+  const [movimentacaoSelecionada, setMovimentacaoSelecionada] = useState(null);
+  const [fornecedorSelecionado, setFornecedorSelecionado] = useState(null);
+  const [mostrarMovimentacoesAntigas, setMostrarMovimentacoesAntigas] = useState(false);
+  const [resumoAberto, setResumoAberto] = useState(false);
+  const [periodoResumo, setPeriodoResumo] = useState('dia');
 
   async function carregarDados() {
     setCarregando(true);
@@ -123,6 +136,19 @@ export default function App() {
     carregarDados();
   }, []);
 
+  useEffect(() => {
+    function fecharComEsc(event) {
+      if (event.key === 'Escape') {
+        setMovimentacaoSelecionada(null);
+        setFornecedorSelecionado(null);
+        setResumoAberto(false);
+      }
+    }
+
+    window.addEventListener('keydown', fecharComEsc);
+    return () => window.removeEventListener('keydown', fecharComEsc);
+  }, []);
+
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
 
@@ -141,6 +167,51 @@ export default function App() {
         .some((valor) => valor.toLowerCase().includes(termo));
     });
   }, [busca, produtos]);
+
+  const movimentacoesVisiveis = mostrarMovimentacoesAntigas
+    ? movimentacoes
+    : movimentacoes.slice(0, LIMITE_MOVIMENTACOES_VISIVEIS);
+
+  const totalMovimentacoesOcultas = Math.max(
+    movimentacoes.length - LIMITE_MOVIMENTACOES_VISIVEIS,
+    0
+  );
+
+  const resumoMovimentacoes = useMemo(() => {
+    const periodo = PERIODOS_RESUMO[periodoResumo];
+    const inicio = new Date();
+    inicio.setHours(0, 0, 0, 0);
+    inicio.setDate(inicio.getDate() - (periodo.dias - 1));
+
+    const itens = movimentacoes.filter((item) => new Date(item.createdAt) >= inicio);
+
+    const porTipo = itens.reduce(
+      (total, item) => {
+        total[item.tipo] = (total[item.tipo] || 0) + Number(item.quantidade || 0);
+        return total;
+      },
+      { entrada: 0, saida: 0, ajuste: 0 }
+    );
+
+    const porProduto = itens.reduce((total, item) => {
+      const nome = item.produto?.nome || 'Produto removido';
+
+      if (!total[nome]) {
+        total[nome] = { produto: nome, entrada: 0, saida: 0, ajuste: 0, total: 0 };
+      }
+
+      total[nome][item.tipo] += Number(item.quantidade || 0);
+      total[nome].total += Number(item.quantidade || 0);
+      return total;
+    }, {});
+
+    return {
+      inicio,
+      itens,
+      porTipo,
+      porProduto: Object.values(porProduto).sort((a, b) => b.total - a.total)
+    };
+  }, [movimentacoes, periodoResumo]);
 
   async function executarAcao(acao, sucesso) {
     setSalvando(true);
@@ -215,6 +286,71 @@ export default function App() {
     await executarAcao(() => api.removerProduto(item._id), 'Produto removido do estoque.');
   }
 
+  function iniciarEdicaoPreco(item) {
+    setPrecoEmEdicao({
+      id: item._id,
+      valor: String(item.precoUnitario ?? 0)
+    });
+  }
+
+  async function salvarPreco(item) {
+    if (!precoEmEdicao || precoEmEdicao.id !== item._id) {
+      return;
+    }
+
+    const novoPreco = Number(String(precoEmEdicao.valor).replace(',', '.'));
+
+    if (Number.isNaN(novoPreco) || novoPreco < 0) {
+      setErro('Informe um valor unitario valido.');
+      return;
+    }
+
+    setPrecoEmEdicao(null);
+
+    await executarAcao(
+      () =>
+        api.atualizarProduto(item._id, {
+          nome: item.nome,
+          categoria: item.categoria?._id || item.categoria,
+          fornecedor: item.fornecedor?._id || item.fornecedor,
+          quantidadeAtual: item.quantidadeAtual,
+          unidadeMedida: item.unidadeMedida,
+          estoqueMinimo: item.estoqueMinimo,
+          precoUnitario: novoPreco,
+          ativo: item.ativo
+        }),
+      'Valor unitario atualizado.'
+    );
+  }
+
+  function lidarTeclaPreco(event, item) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      salvarPreco(item);
+    }
+
+    if (event.key === 'Escape') {
+      setPrecoEmEdicao(null);
+    }
+  }
+
+  async function alterarCategoriaProduto(item, categoriaId) {
+    await executarAcao(
+      () =>
+        api.atualizarProduto(item._id, {
+          nome: item.nome,
+          categoria: categoriaId,
+          fornecedor: item.fornecedor?._id || item.fornecedor,
+          quantidadeAtual: item.quantidadeAtual,
+          unidadeMedida: item.unidadeMedida,
+          estoqueMinimo: item.estoqueMinimo,
+          precoUnitario: item.precoUnitario,
+          ativo: item.ativo
+        }),
+      'Categoria do produto atualizada.'
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -287,11 +423,49 @@ export default function App() {
                       <strong>{item.nome}</strong>
                       <span>{item.unidadeMedida}</span>
                     </td>
-                    <td>{item.categoria?.nome || '-'}</td>
+                    <td>
+                      <select
+                        className="table-select"
+                        onChange={(event) => alterarCategoriaProduto(item, event.target.value)}
+                        title="Alterar categoria"
+                        value={item.categoria?._id || item.categoria || ''}
+                      >
+                        {categorias.map((categoriaItem) => (
+                          <option key={categoriaItem._id} value={categoriaItem._id}>
+                            {categoriaItem.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td>{item.fornecedor?.nome || '-'}</td>
                     <td>{numero(item.quantidadeAtual)}</td>
                     <td>{numero(item.estoqueMinimo)}</td>
-                    <td>{moeda(item.precoUnitario)}</td>
+                    <td>
+                      {precoEmEdicao?.id === item._id ? (
+                        <input
+                          autoFocus
+                          className="inline-price-input"
+                          min="0"
+                          onBlur={() => salvarPreco(item)}
+                          onChange={(event) =>
+                            setPrecoEmEdicao({ id: item._id, valor: event.target.value })
+                          }
+                          onKeyDown={(event) => lidarTeclaPreco(event, item)}
+                          step="0.01"
+                          type="number"
+                          value={precoEmEdicao.valor}
+                        />
+                      ) : (
+                        <button
+                          className="editable-value"
+                          onClick={() => iniciarEdicaoPreco(item)}
+                          title="Editar valor unitario"
+                          type="button"
+                        >
+                          {moeda(item.precoUnitario)}
+                        </button>
+                      )}
+                    </td>
                     <td>
                       <span className={`status ${item.emAlerta ? 'danger' : 'ok'}`}>
                         {item.emAlerta ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
@@ -530,6 +704,60 @@ export default function App() {
         </aside>
       </section>
 
+      <section className="panel supplier-panel">
+        <div className="panel-header">
+          <div>
+            <span className="eyebrow">Parceiros</span>
+            <h2>Fornecedores</h2>
+          </div>
+          <Truck size={20} />
+        </div>
+
+        <div className="table-wrap">
+          <table className="compact-table">
+            <thead>
+              <tr>
+                <th>Fornecedor</th>
+                <th>Telefone</th>
+                <th>Email</th>
+                <th>CNPJ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fornecedores.map((item) => (
+                <tr
+                  className="clickable-row"
+                  key={item._id}
+                  onClick={() => setFornecedorSelecionado(item)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      setFornecedorSelecionado(item);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <td>
+                    <strong>{item.nome}</strong>
+                    <span>{item.endereco || 'Sem endereco'}</span>
+                  </td>
+                  <td>{item.telefone || '-'}</td>
+                  <td>{item.email || '-'}</td>
+                  <td>{item.cnpj || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {!carregando && fornecedores.length === 0 && (
+          <EmptyState
+            title="Nenhum fornecedor cadastrado"
+            text="Cadastre fornecedores para consulta-los nesta tabela."
+          />
+        )}
+      </section>
+
       <section className="bottom-grid">
         <div className="panel">
           <div className="panel-header">
@@ -622,11 +850,19 @@ export default function App() {
               <span className="eyebrow">Historico</span>
               <h2>Ultimas movimentacoes</h2>
             </div>
+            <button className="secondary-button summary-button" onClick={() => setResumoAberto(true)} type="button">
+              Resumo
+            </button>
           </div>
 
           <div className="timeline">
-            {movimentacoes.map((item) => (
-              <article key={item._id} className="timeline-item">
+            {movimentacoesVisiveis.map((item) => (
+              <button
+                key={item._id}
+                className="timeline-item"
+                onClick={() => setMovimentacaoSelecionada(item)}
+                type="button"
+              >
                 <span className={`movement-dot ${item.tipo}`} />
                 <div>
                   <strong>{item.produto?.nome || 'Produto removido'}</strong>
@@ -637,9 +873,21 @@ export default function App() {
                     {dataCurta(item.createdAt)} por {item.usuario}
                   </small>
                 </div>
-              </article>
+              </button>
             ))}
           </div>
+
+          {totalMovimentacoesOcultas > 0 && (
+            <button
+              className="secondary-button history-toggle"
+              onClick={() => setMostrarMovimentacoesAntigas((atual) => !atual)}
+              type="button"
+            >
+              {mostrarMovimentacoesAntigas
+                ? 'Mostrar apenas recentes'
+                : `Mostrar ${totalMovimentacoesOcultas} movimentacao(oes) antiga(s)`}
+            </button>
+          )}
 
           {!carregando && movimentacoes.length === 0 && (
             <EmptyState
@@ -649,6 +897,215 @@ export default function App() {
           )}
         </div>
       </section>
+
+      {movimentacaoSelecionada && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setMovimentacaoSelecionada(null)}
+          role="presentation"
+        >
+          <section
+            aria-labelledby="movimentacao-titulo"
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="modal-header">
+              <div>
+                <span className="eyebrow">Movimentacao</span>
+                <h2 id="movimentacao-titulo">
+                  {movimentacaoSelecionada.produto?.nome || 'Produto removido'}
+                </h2>
+              </div>
+              <button
+                className="icon-button modal-close"
+                onClick={() => setMovimentacaoSelecionada(null)}
+                title="Fechar"
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="detail-grid">
+              <div>
+                <span>Tipo</span>
+                <strong className="capitalize">{movimentacaoSelecionada.tipo}</strong>
+              </div>
+              <div>
+                <span>Quantidade</span>
+                <strong>{numero(movimentacaoSelecionada.quantidade)}</strong>
+              </div>
+              <div>
+                <span>Usuario</span>
+                <strong>{movimentacaoSelecionada.usuario || '-'}</strong>
+              </div>
+              <div>
+                <span>Data</span>
+                <strong>{dataCurta(movimentacaoSelecionada.createdAt)}</strong>
+              </div>
+              <div>
+                <span>Categoria</span>
+                <strong>{movimentacaoSelecionada.produto?.categoria?.nome || '-'}</strong>
+              </div>
+              <div>
+                <span>Fornecedor</span>
+                <strong>{movimentacaoSelecionada.produto?.fornecedor?.nome || '-'}</strong>
+              </div>
+            </div>
+
+            <div className="detail-note">
+              <span>Observacao</span>
+              <p>{movimentacaoSelecionada.observacao || 'Sem observacao registrada.'}</p>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {fornecedorSelecionado && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setFornecedorSelecionado(null)}
+          role="presentation"
+        >
+          <section
+            aria-labelledby="fornecedor-titulo"
+            aria-modal="true"
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="modal-header">
+              <div>
+                <span className="eyebrow">Fornecedor</span>
+                <h2 id="fornecedor-titulo">{fornecedorSelecionado.nome}</h2>
+              </div>
+              <button
+                className="icon-button modal-close"
+                onClick={() => setFornecedorSelecionado(null)}
+                title="Fechar"
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="detail-grid">
+              <div>
+                <span>Nome</span>
+                <strong>{fornecedorSelecionado.nome || '-'}</strong>
+              </div>
+              <div>
+                <span>CNPJ</span>
+                <strong>{fornecedorSelecionado.cnpj || '-'}</strong>
+              </div>
+              <div>
+                <span>Telefone</span>
+                <strong>{fornecedorSelecionado.telefone || '-'}</strong>
+              </div>
+              <div>
+                <span>Email</span>
+                <strong>{fornecedorSelecionado.email || '-'}</strong>
+              </div>
+              <div>
+                <span>Cadastrado em</span>
+                <strong>
+                  {fornecedorSelecionado.createdAt ? dataCurta(fornecedorSelecionado.createdAt) : '-'}
+                </strong>
+              </div>
+              <div>
+                <span>Atualizado em</span>
+                <strong>
+                  {fornecedorSelecionado.updatedAt ? dataCurta(fornecedorSelecionado.updatedAt) : '-'}
+                </strong>
+              </div>
+            </div>
+
+            <div className="detail-note">
+              <span>Endereco</span>
+              <p>{fornecedorSelecionado.endereco || 'Sem endereco registrado.'}</p>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {resumoAberto && (
+        <div className="modal-backdrop" onClick={() => setResumoAberto(false)} role="presentation">
+          <section
+            aria-labelledby="resumo-titulo"
+            aria-modal="true"
+            className="modal-card summary-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="modal-header">
+              <div>
+                <span className="eyebrow">Resumo</span>
+                <h2 id="resumo-titulo">Movimentacoes por periodo</h2>
+              </div>
+              <button
+                className="icon-button modal-close"
+                onClick={() => setResumoAberto(false)}
+                title="Fechar"
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="period-tabs">
+              {Object.entries(PERIODOS_RESUMO).map(([valor, periodo]) => (
+                <button
+                  className={periodoResumo === valor ? 'active' : ''}
+                  key={valor}
+                  onClick={() => setPeriodoResumo(valor)}
+                  type="button"
+                >
+                  {periodo.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="detail-grid summary-grid">
+              <div>
+                <span>Registros</span>
+                <strong>{numero(resumoMovimentacoes.itens.length)}</strong>
+              </div>
+              <div>
+                <span>Entradas</span>
+                <strong>{numero(resumoMovimentacoes.porTipo.entrada)}</strong>
+              </div>
+              <div>
+                <span>Saidas</span>
+                <strong>{numero(resumoMovimentacoes.porTipo.saida)}</strong>
+              </div>
+              <div>
+                <span>Ajustes</span>
+                <strong>{numero(resumoMovimentacoes.porTipo.ajuste)}</strong>
+              </div>
+            </div>
+
+            <div className="summary-list">
+              <span className="summary-list-title">Produtos movimentados</span>
+              {resumoMovimentacoes.porProduto.length > 0 ? (
+                resumoMovimentacoes.porProduto.map((item) => (
+                  <article className="summary-row" key={item.produto}>
+                    <strong>{item.produto}</strong>
+                    <div>
+                      <span>Entrada: {numero(item.entrada)}</span>
+                      <span>Saida: {numero(item.saida)}</span>
+                      <span>Ajuste: {numero(item.ajuste)}</span>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="summary-empty">Nenhuma movimentacao nesse periodo.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
