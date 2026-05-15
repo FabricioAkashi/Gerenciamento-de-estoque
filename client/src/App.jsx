@@ -4,11 +4,13 @@ import {
   ArrowUp,
   Boxes,
   CheckCircle2,
+  Moon,
   PackagePlus,
   RefreshCw,
   Save,
   Search,
   SlidersHorizontal,
+  Sun,
   Trash2,
   X,
   Truck
@@ -32,6 +34,7 @@ const produtoInicial = {
 const categoriaInicial = { nome: '', descricao: '' };
 const fornecedorInicial = { nome: '', cnpj: '', telefone: '', email: '', endereco: '' };
 const LIMITE_MOVIMENTACOES_VISIVEIS = 6;
+const TEMA_PADRAO = 'claro';
 const PERIODOS_RESUMO = {
   dia: { label: '1 dia', dias: 1 },
   semana: { label: '1 semana', dias: 7 },
@@ -63,6 +66,15 @@ function numero(valor) {
   return Number(valor || 0).toLocaleString('pt-BR');
 }
 
+function temaInicial() {
+  if (typeof window === 'undefined') {
+    return TEMA_PADRAO;
+  }
+
+  const temaSalvo = window.localStorage.getItem('tema-estoque');
+  return temaSalvo === 'escuro' ? 'escuro' : TEMA_PADRAO;
+}
+
 export default function App() {
   const [dashboard, setDashboard] = useState(null);
   const [produtos, setProdutos] = useState([]);
@@ -85,6 +97,7 @@ export default function App() {
   const [mostrarMovimentacoesAntigas, setMostrarMovimentacoesAntigas] = useState(false);
   const [resumoAberto, setResumoAberto] = useState(false);
   const [periodoResumo, setPeriodoResumo] = useState('dia');
+  const [tema, setTema] = useState(temaInicial);
 
   async function carregarDados() {
     setCarregando(true);
@@ -135,6 +148,11 @@ export default function App() {
   useEffect(() => {
     carregarDados();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = tema;
+    window.localStorage.setItem('tema-estoque', tema);
+  }, [tema]);
 
   useEffect(() => {
     function fecharComEsc(event) {
@@ -358,9 +376,20 @@ export default function App() {
           <span className="eyebrow">Lanchonete</span>
           <h1>Gestao de Estoque</h1>
         </div>
-        <button className="icon-button" onClick={carregarDados} title="Atualizar dados">
-          <RefreshCw size={18} />
-        </button>
+        <div className="topbar-actions">
+          <button
+            className="theme-switch"
+            onClick={() => setTema((atual) => (atual === 'claro' ? 'escuro' : 'claro'))}
+            title={tema === 'claro' ? 'Usar tema escuro' : 'Usar tema claro'}
+            type="button"
+          >
+            {tema === 'claro' ? <Moon size={17} /> : <Sun size={17} />}
+            <span>{tema === 'claro' ? 'Escuro' : 'Claro'}</span>
+          </button>
+          <button className="icon-button" onClick={carregarDados} title="Atualizar dados">
+            <RefreshCw size={18} />
+          </button>
+        </div>
       </header>
 
       {erro && <div className="notice notice-error">{erro}</div>}

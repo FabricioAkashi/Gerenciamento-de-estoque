@@ -12,6 +12,7 @@
 }
 
 body {
+  background: #f4f6f3;
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
@@ -44,6 +45,32 @@ button {
 
 .topbar {
   margin-bottom: 22px;
+}
+
+.topbar-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.theme-switch {
+  align-items: center;
+  background: #f2f5f1;
+  border: 1px solid #dbe3da;
+  border-radius: 8px;
+  color: #405046;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 13px;
+}
+
+.theme-switch:hover,
+.theme-switch:focus {
+  background: #edf7f1;
+  border-color: #b9d7c6;
+  outline: 0;
 }
 
 .eyebrow {
@@ -743,5 +770,156 @@ textarea:focus {
 
   .metric {
     min-height: 88px;
+  }
+}
+
+[data-theme='escuro'] {
+  color-scheme: dark;
+  color: #e7ece8;
+  background: #111815;
+}
+
+[data-theme='escuro'] body {
+  background: #f4f6f3;
+  background: #111815;
+}
+
+[data-theme='escuro'] h1,
+[data-theme='escuro'] h2,
+[data-theme='escuro'] .metric strong,
+[data-theme='escuro'] td,
+[data-theme='escuro'] .empty-state strong,
+[data-theme='escuro'] .detail-grid strong,
+[data-theme='escuro'] .summary-row strong {
+  color: #f3f7f4;
+}
+
+[data-theme='escuro'] .eyebrow,
+[data-theme='escuro'] th,
+[data-theme='escuro'] td span,
+[data-theme='escuro'] .metric span,
+[data-theme='escuro'] .timeline-item small,
+[data-theme='escuro'] .detail-grid span,
+[data-theme='escuro'] .detail-note span,
+[data-theme='escuro'] label {
+  color: #9dad9f;
+}
+
+[data-theme='escuro'] .panel,
+[data-theme='escuro'] .metric,
+[data-theme='escuro'] .modal-card,
+[data-theme='escuro'] .fatal-error {
+  background: #19231e;
+  border-color: #2c3b33;
+}
+
+[data-theme='escuro'] .search-box,
+[data-theme='escuro'] input,
+[data-theme='escuro'] select,
+[data-theme='escuro'] textarea,
+[data-theme='escuro'] .table-select,
+[data-theme='escuro'] .timeline-item,
+[data-theme='escuro'] .empty-state,
+[data-theme='escuro'] .detail-grid div,
+[data-theme='escuro'] .detail-note,
+[data-theme='escuro'] .summary-list-title {
+  background: #121b17;
+  border-color: #2c3b33;
+  color: #e7ece8;
+}
+
+[data-theme='escuro'] .tabs button,
+[data-theme='escuro'] .movement-options button,
+[data-theme='escuro'] .period-tabs button,
+[data-theme='escuro'] .table-action,
+[data-theme='escuro'] .secondary-button,
+[data-theme='escuro'] .theme-switch {
+  background: #223027;
+  border-color: #35473d;
+  color: #dce6de;
+}
+
+[data-theme='escuro'] .tabs button.active,
+[data-theme='escuro'] .movement-options button.active,
+[data-theme='escuro'] .icon-button,
+[data-theme='escuro'] .primary-button,
+[data-theme='escuro'] .period-tabs button.active {
+  background: #58b584;
+  border-color: #58b584;
+  color: #0b120f;
+}
+
+[data-theme='escuro'] .secondary-button:hover,
+[data-theme='escuro'] .secondary-button:focus,
+[data-theme='escuro'] .theme-switch:hover,
+[data-theme='escuro'] .theme-switch:focus,
+[data-theme='escuro'] .clickable-row:hover,
+[data-theme='escuro'] .clickable-row:focus,
+[data-theme='escuro'] .timeline-item:hover,
+[data-theme='escuro'] .timeline-item:focus,
+[data-theme='escuro'] .editable-value:hover,
+[data-theme='escuro'] .editable-value:focus {
+  background: #26392f;
+  border-color: #4e6d5d;
+}
+
+[data-theme='escuro'] td,
+[data-theme='escuro'] th {
+  border-bottom-color: #2a3931;
+}
+
+[data-theme='escuro'] .editable-value {
+  color: #7ad89f;
+}
+
+[data-theme='escuro'] .timeline-item p,
+[data-theme='escuro'] .detail-note p,
+[data-theme='escuro'] .fatal-error p,
+[data-theme='escuro'] .fatal-error span {
+  color: #c9d5cc;
+}
+
+[data-theme='escuro'] .summary-list {
+  border-color: #2c3b33;
+}
+
+[data-theme='escuro'] .summary-row {
+  border-top-color: #2c3b33;
+}
+
+[data-theme='escuro'] .summary-row span {
+  background: #26392f;
+  color: #bfe4cc;
+}
+
+[data-theme='escuro'] .notice-error {
+  background: #3a1c18;
+  color: #ffb6a8;
+}
+
+[data-theme='escuro'] .notice-success,
+[data-theme='escuro'] .status.ok {
+  background: #143323;
+  color: #9ee0b4;
+}
+
+[data-theme='escuro'] .status.danger,
+[data-theme='escuro'] .table-action.danger {
+  background: #3a1c18;
+  border-color: #6b352c;
+  color: #ffb6a8;
+}
+
+[data-theme='escuro'] .modal-backdrop {
+  background: rgba(5, 9, 7, 0.72);
+}
+
+@media (max-width: 700px) {
+  .topbar-actions {
+    width: 100%;
+  }
+
+  .theme-switch {
+    flex: 1;
   }
 }
