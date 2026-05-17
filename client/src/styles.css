@@ -290,6 +290,72 @@ h2 {
   margin-bottom: 16px;
 }
 
+
+.inventory-header {
+  align-items: flex-start;
+}
+
+.product-filters {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 0.9fr) minmax(160px, 0.9fr) minmax(130px, 0.75fr) auto;
+  max-width: 100%;
+  width: min(920px, 100%);
+}
+
+.product-filters .search-box {
+  width: 100%;
+}
+
+.product-filters select,
+.product-filters .filter-clear {
+  min-height: 42px;
+}
+
+.sort-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: inline-flex;
+  font-size: inherit;
+  font-weight: 900;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0;
+  text-align: left;
+  text-transform: uppercase;
+  width: 100%;
+}
+
+.sort-button span {
+  color: #1f5d46;
+  display: inline;
+  font-size: 0.68rem;
+  font-weight: 900;
+  margin: 0;
+  min-width: 24px;
+}
+
+.sort-button:hover,
+.sort-button:focus {
+  color: #1f5d46;
+  outline: 0;
+}
+
+.product-edit-modal {
+  max-width: 720px;
+}
+
+.confirm-note {
+  background: #f8faf7;
+  border: 1px solid #e5ebe4;
+  border-radius: 8px;
+  color: #4b5a51;
+  line-height: 1.45;
+  margin: 0;
+  padding: 12px;
+}
 .search-box {
   align-items: center;
   background: #f7f9f6;
@@ -824,6 +890,7 @@ textarea:focus {
   }
 
   .work-grid,
+  .product-filters,
   .bottom-grid {
     grid-template-columns: 1fr;
   }
@@ -984,6 +1051,7 @@ textarea:focus {
   border-color: #2c3b33;
 }
 
+[data-theme='escuro'] .confirm-note,
 [data-theme='escuro'] .search-box,
 [data-theme='escuro'] input,
 [data-theme='escuro'] select,
@@ -1039,11 +1107,13 @@ textarea:focus {
   border-bottom-color: #2a3931;
 }
 
+[data-theme='escuro'] .sort-button span,
 [data-theme='escuro'] .editable-value,
 [data-theme='escuro'] .user-badge strong {
   color: #7ad89f;
 }
 
+[data-theme='escuro'] .confirm-note,
 [data-theme='escuro'] .auth-card p,
 [data-theme='escuro'] .timeline-item p,
 [data-theme='escuro'] .detail-note p,

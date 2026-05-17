@@ -37,6 +37,7 @@ const produtoInicial = {
 
 const categoriaInicial = { nome: '', descricao: '' };
 const fornecedorInicial = { nome: '', cnpj: '', telefone: '', email: '', endereco: '' };
+const filtrosProdutoInicial = { categoria: '', fornecedor: '', status: '' };
 const LIMITE_MOVIMENTACOES_VISIVEIS = 6;
 const TEMA_PADRAO = 'claro';
 const PERIODOS_RESUMO = {
@@ -99,6 +100,10 @@ export default function App() {
   const [fornecedor, setFornecedor] = useState(fornecedorInicial);
   const [movimentacao, setMovimentacao] = useState(movimentacaoInicial);
   const [busca, setBusca] = useState('');
+  const [filtrosProduto, setFiltrosProduto] = useState(filtrosProdutoInicial);
+  const [ordenacaoProdutos, setOrdenacaoProdutos] = useState({ campo: 'nome', direcao: 'asc' });
+  const [produtoEditando, setProdutoEditando] = useState(null);
+  const [produtoEdicao, setProdutoEdicao] = useState(null);
   const [aba, setAba] = useState('produto');
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -298,6 +303,8 @@ export default function App() {
       if (event.key === 'Escape') {
         setMovimentacaoSelecionada(null);
         setFornecedorSelecionado(null);
+        setProdutoEditando(null);
+        setProdutoEdicao(null);
         setResumoAberto(false);
       }
     }
@@ -309,21 +316,71 @@ export default function App() {
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
 
-    if (!termo) {
-      return produtos;
+    const lista = produtos.filter((item) => {
+      const correspondeBusca = termo
+        ? [item.nome, item.categoria?.nome, item.fornecedor?.nome, item.unidadeMedida]
+            .filter(Boolean)
+            .some((valor) => valor.toLowerCase().includes(termo))
+        : true;
+      const correspondeCategoria = filtrosProduto.categoria
+        ? (item.categoria?._id || item.categoria) === filtrosProduto.categoria
+        : true;
+      const correspondeFornecedor = filtrosProduto.fornecedor
+        ? (item.fornecedor?._id || item.fornecedor) === filtrosProduto.fornecedor
+        : true;
+      const correspondeStatus = filtrosProduto.status
+        ? filtrosProduto.status === 'alerta'
+          ? item.emAlerta
+          : !item.emAlerta
+        : true;
+
+      return correspondeBusca && correspondeCategoria && correspondeFornecedor && correspondeStatus;
+    });
+
+    const valorCampo = (item) => {
+      if (ordenacaoProdutos.campo === 'nome') return item.nome || '';
+      if (ordenacaoProdutos.campo === 'categoria') return item.categoria?.nome || '';
+      if (ordenacaoProdutos.campo === 'fornecedor') return item.fornecedor?.nome || '';
+      if (ordenacaoProdutos.campo === 'quantidadeAtual') return Number(item.quantidadeAtual || 0);
+      if (ordenacaoProdutos.campo === 'estoqueMinimo') return Number(item.estoqueMinimo || 0);
+      if (ordenacaoProdutos.campo === 'precoUnitario') return Number(item.precoUnitario || 0);
+      if (ordenacaoProdutos.campo === 'status') return item.emAlerta ? 1 : 0;
+      return item.nome || '';
+    };
+
+    return [...lista].sort((a, b) => {
+      const valorA = valorCampo(a);
+      const valorB = valorCampo(b);
+      const direcao = ordenacaoProdutos.direcao === 'asc' ? 1 : -1;
+
+      if (typeof valorA === 'number' && typeof valorB === 'number') {
+        return (valorA - valorB) * direcao;
+      }
+
+      return String(valorA).localeCompare(String(valorB), 'pt-BR', { sensitivity: 'base' }) * direcao;
+    });
+  }, [busca, filtrosProduto, ordenacaoProdutos, produtos]);
+
+  function alternarOrdenacao(campo) {
+    setOrdenacaoProdutos((atual) => ({
+      campo,
+      direcao: atual.campo === campo && atual.direcao === 'asc' ? 'desc' : 'asc'
+    }));
+  }
+
+  function indicadorOrdenacao(campo) {
+    if (ordenacaoProdutos.campo !== campo) {
+      return '--';
     }
 
-    return produtos.filter((item) => {
-      return [
-        item.nome,
-        item.categoria?.nome,
-        item.fornecedor?.nome,
-        item.unidadeMedida
-      ]
-        .filter(Boolean)
-        .some((valor) => valor.toLowerCase().includes(termo));
-    });
-  }, [busca, produtos]);
+    return ordenacaoProdutos.direcao === 'asc' ? 'A-Z' : 'Z-A';
+  }
+
+  function limparFiltrosProduto() {
+    setBusca('');
+    setFiltrosProduto(filtrosProdutoInicial);
+    setOrdenacaoProdutos({ campo: 'nome', direcao: 'asc' });
+  }
 
   const movimentacoesVisiveis = mostrarMovimentacoesAntigas
     ? movimentacoes
@@ -491,21 +548,55 @@ export default function App() {
     }
   }
 
-  async function alterarCategoriaProduto(item, categoriaId) {
-    await executarAcao(
-      () =>
-        api.atualizarProduto(item._id, {
-          nome: item.nome,
-          categoria: categoriaId,
-          fornecedor: item.fornecedor?._id || item.fornecedor,
-          quantidadeAtual: item.quantidadeAtual,
-          unidadeMedida: item.unidadeMedida,
-          estoqueMinimo: item.estoqueMinimo,
-          precoUnitario: item.precoUnitario,
-          ativo: item.ativo
-        }),
-      'Categoria do produto atualizada.'
-    );
+  function abrirEdicaoProduto(item) {
+    if (!admin) {
+      return;
+    }
+
+    setProdutoEditando(item);
+    setProdutoEdicao({
+      nome: item.nome || '',
+      categoria: item.categoria?._id || item.categoria || '',
+      fornecedor: item.fornecedor?._id || item.fornecedor || '',
+      quantidadeAtual: String(item.quantidadeAtual ?? 0),
+      unidadeMedida: item.unidadeMedida || 'un',
+      estoqueMinimo: String(item.estoqueMinimo ?? 0),
+      precoUnitario: String(item.precoUnitario ?? 0),
+      ativo: item.ativo
+    });
+  }
+
+  function fecharEdicaoProduto() {
+    setProdutoEditando(null);
+    setProdutoEdicao(null);
+  }
+
+  async function salvarProdutoEditado(event) {
+    event.preventDefault();
+
+    if (!produtoEditando || !produtoEdicao) {
+      return;
+    }
+
+    setSalvando(true);
+    setErro('');
+    setMensagem('');
+
+    try {
+      await api.atualizarProduto(produtoEditando._id, {
+        ...produtoEdicao,
+        quantidadeAtual: Number(produtoEdicao.quantidadeAtual),
+        estoqueMinimo: Number(produtoEdicao.estoqueMinimo),
+        precoUnitario: Number(String(produtoEdicao.precoUnitario).replace(',', '.'))
+      });
+      setMensagem('Produto atualizado.');
+      await carregarDados();
+      fecharEdicaoProduto();
+    } catch (error) {
+      setErro(error.message);
+    } finally {
+      setSalvando(false);
+    }
   }
 
   if (authCarregando) {
@@ -633,91 +724,91 @@ export default function App() {
 
       <section className="work-grid">
         <div className="panel panel-wide">
-          <div className="panel-header">
+          <div className="panel-header inventory-header">
             <div>
               <span className="eyebrow">Inventario</span>
               <h2>Produtos</h2>
             </div>
-            <label className="search-box">
-              <Search size={17} />
-              <input
-                value={busca}
-                onChange={(event) => setBusca(event.target.value)}
-                placeholder="Buscar produto, categoria ou fornecedor"
-              />
-            </label>
+            <div className="product-filters">
+              <label className="search-box">
+                <Search size={17} />
+                <input
+                  value={busca}
+                  onChange={(event) => setBusca(event.target.value)}
+                  placeholder="Buscar produto, categoria ou fornecedor"
+                />
+              </label>
+              <select
+                aria-label="Filtrar por categoria"
+                value={filtrosProduto.categoria}
+                onChange={(event) =>
+                  setFiltrosProduto((atual) => ({ ...atual, categoria: event.target.value }))
+                }
+              >
+                <option value="">Todas as categorias</option>
+                {categorias.map((item) => (
+                  <option key={item._id} value={item._id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Filtrar por fornecedor"
+                value={filtrosProduto.fornecedor}
+                onChange={(event) =>
+                  setFiltrosProduto((atual) => ({ ...atual, fornecedor: event.target.value }))
+                }
+              >
+                <option value="">Todos os fornecedores</option>
+                {fornecedores.map((item) => (
+                  <option key={item._id} value={item._id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Filtrar por status"
+                value={filtrosProduto.status}
+                onChange={(event) =>
+                  setFiltrosProduto((atual) => ({ ...atual, status: event.target.value }))
+                }
+              >
+                <option value="">Todos os status</option>
+                <option value="ok">Estoque OK</option>
+                <option value="alerta">Em alerta</option>
+              </select>
+              <button className="secondary-button filter-clear" onClick={limparFiltrosProduto} type="button">
+                Limpar
+              </button>
+            </div>
           </div>
 
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Produto</th>
-                  <th>Categoria</th>
-                  <th>Fornecedor</th>
-                  <th>Qtd.</th>
-                  <th>Min.</th>
-                  <th>Valor</th>
-                  <th>Status</th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('nome')} type="button">Produto <span>{indicadorOrdenacao('nome')}</span></button></th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('categoria')} type="button">Categoria <span>{indicadorOrdenacao('categoria')}</span></button></th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('fornecedor')} type="button">Fornecedor <span>{indicadorOrdenacao('fornecedor')}</span></button></th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('quantidadeAtual')} type="button">Qtd. <span>{indicadorOrdenacao('quantidadeAtual')}</span></button></th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('estoqueMinimo')} type="button">Min. <span>{indicadorOrdenacao('estoqueMinimo')}</span></button></th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('precoUnitario')} type="button">Valor <span>{indicadorOrdenacao('precoUnitario')}</span></button></th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('status')} type="button">Status <span>{indicadorOrdenacao('status')}</span></button></th>
                   {admin && <th>Acoes</th>}
                 </tr>
               </thead>
               <tbody>
                 {produtosFiltrados.map((item) => (
-                  <tr key={item._id}>
+                  <tr className={admin ? "clickable-row" : undefined} key={item._id} onClick={() => abrirEdicaoProduto(item)}>
                     <td>
                       <strong>{item.nome}</strong>
                       <span>{item.unidadeMedida}</span>
                     </td>
-                    <td>
-                      {admin ? (
-                        <select
-                          className="table-select"
-                          onChange={(event) => alterarCategoriaProduto(item, event.target.value)}
-                          title="Alterar categoria"
-                          value={item.categoria?._id || item.categoria || ''}
-                        >
-                          {categorias.map((categoriaItem) => (
-                            <option key={categoriaItem._id} value={categoriaItem._id}>
-                              {categoriaItem.nome}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        item.categoria?.nome || '-'
-                      )}
-                    </td>
+                    <td>{item.categoria?.nome || '-'}</td>
                     <td>{item.fornecedor?.nome || '-'}</td>
                     <td>{numero(item.quantidadeAtual)}</td>
                     <td>{numero(item.estoqueMinimo)}</td>
-                    <td>
-                      {admin && precoEmEdicao?.id === item._id ? (
-                        <input
-                          autoFocus
-                          className="inline-price-input"
-                          min="0"
-                          onBlur={() => salvarPreco(item)}
-                          onChange={(event) =>
-                            setPrecoEmEdicao({ id: item._id, valor: event.target.value })
-                          }
-                          onKeyDown={(event) => lidarTeclaPreco(event, item)}
-                          step="0.01"
-                          type="number"
-                          value={precoEmEdicao.valor}
-                        />
-                      ) : admin ? (
-                        <button
-                          className="editable-value"
-                          onClick={() => iniciarEdicaoPreco(item)}
-                          title="Editar valor unitario"
-                          type="button"
-                        >
-                          {moeda(item.precoUnitario)}
-                        </button>
-                      ) : (
-                        moeda(item.precoUnitario)
-                      )}
-                    </td>
+                    <td>{moeda(item.precoUnitario)}</td>
                     <td>
                       <span className={`status ${item.emAlerta ? 'danger' : 'ok'}`}>
                         {item.emAlerta ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
@@ -728,7 +819,7 @@ export default function App() {
                       <td>
                         <button
                           className="table-action danger"
-                          onClick={() => removerProduto(item)}
+                          onClick={(event) => { event.stopPropagation(); removerProduto(item); }}
                           title="Remover produto"
                           type="button"
                         >
@@ -1283,6 +1374,145 @@ export default function App() {
           )}
         </div>
       </section>
+
+      {produtoEditando && produtoEdicao && (
+        <div className="modal-backdrop" onClick={fecharEdicaoProduto} role="presentation">
+          <section
+            aria-labelledby="produto-edicao-titulo"
+            aria-modal="true"
+            className="modal-card product-edit-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="modal-header">
+              <div>
+                <span className="eyebrow">Confirmar alteracao</span>
+                <h2 id="produto-edicao-titulo">Editar produto</h2>
+              </div>
+              <button
+                className="icon-button modal-close"
+                onClick={fecharEdicaoProduto}
+                title="Fechar"
+                type="button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form className="form" onSubmit={salvarProdutoEditado}>
+              <label>
+                Nome
+                <input
+                  required
+                  value={produtoEdicao.nome}
+                  onChange={(event) =>
+                    setProdutoEdicao((atual) => ({ ...atual, nome: event.target.value }))
+                  }
+                />
+              </label>
+              <div className="form-row">
+                <label>
+                  Categoria
+                  <select
+                    required
+                    value={produtoEdicao.categoria}
+                    onChange={(event) =>
+                      setProdutoEdicao((atual) => ({ ...atual, categoria: event.target.value }))
+                    }
+                  >
+                    <option value="">Selecione</option>
+                    {categorias.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Fornecedor
+                  <select
+                    required
+                    value={produtoEdicao.fornecedor}
+                    onChange={(event) =>
+                      setProdutoEdicao((atual) => ({ ...atual, fornecedor: event.target.value }))
+                    }
+                  >
+                    <option value="">Selecione</option>
+                    {fornecedores.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Quantidade
+                  <input
+                    min="0"
+                    required
+                    type="number"
+                    value={produtoEdicao.quantidadeAtual}
+                    onChange={(event) =>
+                      setProdutoEdicao((atual) => ({ ...atual, quantidadeAtual: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Estoque minimo
+                  <input
+                    min="0"
+                    required
+                    type="number"
+                    value={produtoEdicao.estoqueMinimo}
+                    onChange={(event) =>
+                      setProdutoEdicao((atual) => ({ ...atual, estoqueMinimo: event.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Unidade
+                  <input
+                    required
+                    value={produtoEdicao.unidadeMedida}
+                    onChange={(event) =>
+                      setProdutoEdicao((atual) => ({ ...atual, unidadeMedida: event.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Preco unitario
+                  <input
+                    min="0"
+                    required
+                    step="0.01"
+                    type="number"
+                    value={produtoEdicao.precoUnitario}
+                    onChange={(event) =>
+                      setProdutoEdicao((atual) => ({ ...atual, precoUnitario: event.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+              <p className="confirm-note">
+                Revise as alteracoes antes de confirmar. A atualizacao sera aplicada ao estoque.
+              </p>
+              <div className="form-actions">
+                <button className="primary-button" disabled={salvando} type="submit">
+                  <Save size={17} />
+                  Confirmar alteracao
+                </button>
+                <button className="secondary-button" onClick={fecharEdicaoProduto} type="button">
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       {movimentacaoSelecionada && (
         <div
