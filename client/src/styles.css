@@ -298,9 +298,9 @@ h2 {
 .product-filters {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 0.9fr) minmax(160px, 0.9fr) minmax(130px, 0.75fr) auto;
+  grid-template-columns: minmax(260px, 1.4fr) minmax(210px, 1fr) minmax(220px, 1fr) minmax(160px, 0.8fr) minmax(88px, auto);
   max-width: 100%;
-  width: min(920px, 100%);
+  width: min(1120px, 100%);
 }
 
 .product-filters .search-box {
