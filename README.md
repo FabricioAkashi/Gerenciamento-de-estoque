@@ -1,6 +1,6 @@
 # Estoque Lanchonete
 
-Aplicacao web com React, Node.js, Express e MongoDB para controlar estoque de uma lanchonete. O fluxo de caixa ainda nao foi implementado, conforme solicitado.
+Aplicacao web com React, Node.js, Express e MongoDB para controlar estoque de uma lanchonete. O fluxo de caixa ainda nao foi implementado conforme planejado.
 
 ## Recursos
 
