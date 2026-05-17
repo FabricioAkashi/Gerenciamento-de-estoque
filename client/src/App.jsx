@@ -722,7 +722,7 @@ export default function App() {
         />
       </section>
 
-      <section className={`work-grid ${admin ? '' : 'viewer-grid'}`}>
+      <section className="work-grid">
         <div className="panel panel-wide">
           <div className="panel-header inventory-header">
             <div>
