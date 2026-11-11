@@ -1,50 +1,53 @@
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Oath Biome - Design System Tokens */
+  /* Minimalista Monocromático (Estilo Linear / Apple) */
   --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-  /* Superfícies & Fundo (Warm Botanical Paper & Earth) */
-  --bg: #FAF8F5;
+  /* Superfícies & Fundo */
+  --bg: #FFFFFF;
   --surface: #FFFFFF;
-  --surface-muted: #F3EFE8;
-  --surface-hover: #F7F4ED;
-  --surface-input: #FAF8F5;
+  --surface-muted: #F4F4F5;       /* Zinc 100 */
+  --surface-hover: #EFEFEF;
+  --surface-input: #FAFAFA;       /* Zinc 50 */
 
-  /* Tipografia (Soil Ink & Stone) */
-  --text-main: #231C18;
-  --text-body: #4A423B;
-  --text-muted: #7A7067;
-  --text-light: #9B9187;
+  /* Tipografia Monocromática */
+  --text-main: #09090B;          /* Zinc 950 */
+  --text-body: #27272A;          /* Zinc 800 */
+  --text-muted: #71717A;         /* Zinc 500 */
+  --text-light: #A1A1AA;         /* Zinc 400 */
 
-  /* Linhas Estruturais (Delicate Taupe Hairline Rules) */
-  --border: #E6E0D6;
-  --border-strong: #CDC5B7;
-  --border-focus: #183C2F;
+  /* Linhas & Bordas Hairline */
+  --border: #E4E4E7;             /* Zinc 200 */
+  --border-strong: #D4D4D8;      /* Zinc 300 */
+  --border-focus: #09090B;       /* Preto sólido no foco */
 
-  /* Cores de Destaque Botânicas (Forest, Sage & Terracotta) */
-  --primary: #183C2F;
-  --primary-hover: #224E3E;
-  --primary-text: #FAF8F5;
+  /* Acentos Monocromáticos (Apple / Linear) */
+  --primary: #09090B;            /* Preto absoluto para CTAs */
+  --primary-hover: #27272A;      /* Grafite escuro */
+  --primary-text: #FFFFFF;
 
-  --accent-sage: #566E5B;
-  --accent-terracotta: #A64B2A;
-  --accent-copper: #A86532;
-  --accent-slate: #2B576C;
+  --accent-secondary: #F4F4F5;
+  --accent-secondary-text: #09090B;
+  --accent-secondary-border: #E4E4E7;
 
-  /* Estados de Sucesso / Alerta / Estoque */
-  --status-ok-bg: #EDF5F0;
-  --status-ok-text: #1B5236;
-  --status-ok-border: #CBE2D4;
+  /* Indicadores e Alertas */
+  --accent-neutral: #18181B;
+  --accent-warn: #DC2626;
 
-  --status-danger-bg: #FDF2ED;
-  --status-danger-text: #963F20;
-  --status-danger-border: #F3D2C4;
+  /* Pílulas de Status Discretas */
+  --status-ok-bg: #F4F4F5;
+  --status-ok-text: #18181B;
+  --status-ok-border: #E4E4E7;
 
-  --status-stock-bg: #EEF4F8;
-  --status-stock-text: #23526E;
-  --status-stock-border: #CCE0ED;
+  --status-danger-bg: #FEF2F2;
+  --status-danger-text: #991B1B;
+  --status-danger-border: #FEE2E2;
+
+  --status-stock-bg: #F4F4F5;
+  --status-stock-text: #27272A;
+  --status-stock-border: #E4E4E7;
 
   /* Raios e Sombras Minimalistas */
   --radius-sm: 6px;
@@ -52,9 +55,9 @@
   --radius-lg: 12px;
   --radius-pill: 999px;
 
-  --shadow-subtle: 0 1px 2px rgba(35, 28, 24, 0.03), 0 2px 6px rgba(35, 28, 24, 0.02);
-  --shadow-card: 0 1px 3px rgba(35, 28, 24, 0.04), 0 4px 12px rgba(35, 28, 24, 0.02);
-  --shadow-modal: 0 24px 60px rgba(25, 20, 16, 0.16);
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.02);
+  --shadow-modal: 0 20px 48px -10px rgba(0, 0, 0, 0.16);
 
   color: var(--text-main);
   background: var(--bg);
@@ -66,45 +69,47 @@
 
 [data-theme='escuro'] {
   color-scheme: dark;
-  --bg: #111413;
-  --surface: #171C1A;
-  --surface-muted: #1E2522;
-  --surface-hover: #232C28;
-  --surface-input: #141A17;
+  --bg: #09090B;                 /* Zinc 950 / Preto absoluto */
+  --surface: #111113;            /* Superfície escura elevada */
+  --surface-muted: #18181B;      /* Zinc 900 */
+  --surface-hover: #27272A;      /* Zinc 800 */
+  --surface-input: #141416;
 
-  --text-main: #F3EFE8;
-  --text-body: #B5BFB7;
-  --text-muted: #7E8C82;
-  --text-light: #5B685F;
+  --text-main: #FAFAFA;          /* Zinc 50 - Branco puro */
+  --text-body: #E4E4E7;          /* Zinc 200 */
+  --text-muted: #A1A1AA;         /* Zinc 400 */
+  --text-light: #71717A;         /* Zinc 500 */
 
-  --border: #28332D;
-  --border-strong: #38473F;
-  --border-focus: #52A67C;
+  --border: #27272A;             /* Zinc 800 */
+  --border-strong: #3F3F46;      /* Zinc 700 */
+  --border-focus: #FAFAFA;       /* Branco no foco */
 
-  --primary: #52A67C;
-  --primary-hover: #67B88F;
-  --primary-text: #0E1411;
+  --primary: #FAFAFA;            /* Branco puro nos CTAs no modo escuro */
+  --primary-hover: #E4E4E7;
+  --primary-text: #09090B;       /* Texto preto no botão branco */
 
-  --accent-sage: #81A188;
-  --accent-terracotta: #D97352;
-  --accent-copper: #D48C57;
-  --accent-slate: #5E93AE;
+  --accent-secondary: #18181B;
+  --accent-secondary-text: #FAFAFA;
+  --accent-secondary-border: #27272A;
 
-  --status-ok-bg: #152E22;
-  --status-ok-text: #94DBB0;
-  --status-ok-border: #25543D;
+  --accent-neutral: #FAFAFA;
+  --accent-warn: #EF4444;
 
-  --status-danger-bg: #351C17;
-  --status-danger-text: #F7A892;
-  --status-danger-border: #5E2E25;
+  --status-ok-bg: #18181B;
+  --status-ok-text: #E4E4E7;
+  --status-ok-border: #27272A;
 
-  --status-stock-bg: #162630;
-  --status-stock-text: #8EC2E2;
-  --status-stock-border: #264355;
+  --status-danger-bg: #271214;
+  --status-danger-text: #FCA5A5;
+  --status-danger-border: #451A20;
 
-  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.35);
-  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --status-stock-bg: #18181B;
+  --status-stock-text: #E4E4E7;
+  --status-stock-border: #27272A;
+
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.7);
 }
 
 * {
@@ -117,7 +122,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 button,
@@ -134,13 +139,13 @@ button {
   background: transparent;
 }
 
-/* Tipografia Editorial Minimalista */
+/* Tipografia Editorial Monocromática */
 h1,
 h2,
 h3 {
   font-family: var(--font-serif);
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   color: var(--text-main);
   margin: 0;
 }
@@ -156,12 +161,12 @@ h2 {
 }
 
 .eyebrow {
-  color: var(--accent-sage);
+  color: var(--text-muted);
   display: block;
   font-family: var(--font-sans);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   margin-bottom: 4px;
   text-transform: uppercase;
 }
@@ -209,7 +214,7 @@ h2 {
 }
 
 .user-badge strong {
-  color: var(--primary);
+  color: var(--text-main);
   font-weight: 600;
   background: var(--surface-muted);
   padding: 2px 8px;
@@ -217,11 +222,6 @@ h2 {
   font-size: 0.75rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-[data-theme='escuro'] .user-badge strong {
-  color: var(--primary);
-  background: var(--surface-muted);
 }
 
 .theme-switch {
@@ -306,7 +306,7 @@ h2 {
   margin-bottom: 22px;
 }
 
-/* Cards de Métricas (Editorial Ledger Style) */
+/* Cards de Métricas (Linear Style) */
 .metric {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -332,13 +332,13 @@ h2 {
 
 .metric:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 14px rgba(35, 28, 24, 0.06);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
 }
 
 .metric span {
   color: var(--text-muted);
   display: block;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   margin-bottom: 12px;
@@ -355,18 +355,18 @@ h2 {
 }
 
 .metric-warning::before {
-  background: var(--accent-terracotta);
+  background: var(--accent-warn);
 }
 .metric-warning strong {
-  color: var(--accent-terracotta);
+  color: var(--accent-warn);
 }
 
 .metric-stock::before {
-  background: var(--accent-slate);
+  background: var(--accent-neutral);
 }
 
 .metric-money::before {
-  background: var(--accent-copper);
+  background: var(--border-strong);
 }
 
 /* Painéis Principais */
@@ -428,7 +428,11 @@ h2 {
 .search-box:focus-within {
   border-color: var(--border-focus);
   background: var(--surface);
-  box-shadow: 0 0 0 2px rgba(24, 60, 47, 0.08);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='escuro'] .search-box:focus-within {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
 .search-box input {
@@ -469,7 +473,7 @@ h2 {
 }
 
 .sort-button span {
-  color: var(--primary);
+  color: var(--text-main);
   display: inline;
   font-size: 0.7rem;
   font-weight: 700;
@@ -479,11 +483,11 @@ h2 {
 
 .sort-button:hover,
 .sort-button:focus {
-  color: var(--primary);
+  color: var(--text-main);
   outline: 0;
 }
 
-/* Tabelas com Estilo "Botanical Ledger" */
+/* Tabelas Monocromáticas (Ledger Style) */
 .table-wrap {
   margin-top: 20px;
   overflow-x: auto;
@@ -561,7 +565,7 @@ td span {
   font-size: 0.85rem;
 }
 
-/* Pílulas de Status */
+/* Pílulas de Status Discretas */
 .status {
   align-items: center;
   border-radius: var(--radius-pill);
@@ -606,6 +610,7 @@ td span {
 .table-action:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
+  color: var(--text-main);
 }
 
 .table-action.danger {
@@ -623,7 +628,7 @@ td span {
   background: transparent;
   border: 1px dashed transparent;
   border-radius: var(--radius-sm);
-  color: var(--primary);
+  color: var(--text-main);
   font-weight: 600;
   min-height: 32px;
   padding: 2px 8px;
@@ -644,12 +649,12 @@ td span {
   font-size: 0.88rem;
 }
 
-/* Abas de Navegação (Minimalist Pill Bars) */
+/* Abas de Navegação (Segmented Control Estilo Apple) */
 .tabs,
 .movement-options,
 .period-tabs {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   background: var(--surface-muted);
   padding: 4px;
   border-radius: var(--radius-md);
@@ -686,9 +691,9 @@ td span {
 .movement-options button.active,
 .period-tabs button.active {
   background: var(--surface);
-  color: var(--primary);
-  box-shadow: 0 1px 3px rgba(35, 28, 24, 0.08);
-  font-weight: 700;
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-weight: 600;
 }
 
 [data-theme='escuro'] .tabs button.active,
@@ -696,6 +701,7 @@ td span {
 [data-theme='escuro'] .period-tabs button.active {
   background: var(--primary);
   color: var(--primary-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Formulários e Inputs */
@@ -744,7 +750,13 @@ select:focus,
 textarea:focus {
   border-color: var(--border-focus);
   background: var(--surface);
-  box-shadow: 0 0 0 2px rgba(24, 60, 47, 0.1);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='escuro'] input:focus,
+[data-theme='escuro'] select:focus,
+[data-theme='escuro'] textarea:focus {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
 input:disabled,
@@ -753,7 +765,7 @@ textarea:disabled {
   background: var(--surface-muted);
   color: var(--text-muted);
   cursor: not-allowed;
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 /* Botões de Ação Primária & Secundária */
@@ -781,7 +793,7 @@ textarea:disabled {
 
 .primary-button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 .secondary-button {
@@ -876,15 +888,15 @@ textarea:disabled {
 }
 
 .movement-dot.entrada {
-  background: var(--status-ok-text);
+  background: var(--text-main);
 }
 
 .movement-dot.saida {
-  background: var(--status-danger-text);
+  background: var(--accent-warn);
 }
 
 .movement-dot.ajuste {
-  background: var(--accent-slate);
+  background: var(--text-muted);
 }
 
 .history-toggle {
@@ -896,7 +908,7 @@ textarea:disabled {
   flex: 0 0 auto;
 }
 
-/* Empty State & Avisos Fatais */
+/* Empty State & Avisos */
 .empty-state {
   align-items: center;
   background: var(--surface-muted);
@@ -975,7 +987,7 @@ textarea:disabled {
 }
 
 .auth-header svg {
-  color: var(--primary);
+  color: var(--text-main);
 }
 
 /* Gestão de Usuários */
@@ -1024,8 +1036,8 @@ textarea:disabled {
 /* Modais e Detalhes */
 .modal-backdrop {
   align-items: center;
-  background: rgba(25, 20, 16, 0.48);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
   display: flex;
   inset: 0;
   justify-content: center;
@@ -1181,7 +1193,7 @@ textarea:disabled {
   text-align: center;
 }
 
-/* Responsividade Aprimorada */
+/* Responsividade */
 @media (max-width: 1100px) {
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
