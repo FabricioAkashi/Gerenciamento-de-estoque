@@ -37,17 +37,33 @@ export function createApp() {
     ? process.env.CLIENT_ORIGIN.split(',').map((o) => o.trim())
     : ['http://localhost:5173'];
 
-  const corsOptions = {
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error('Bloqueado pela politica de CORS: origem nao autorizada.'));
-    },
-    credentials: true
+  const corsOptionsDelegate = (req, callback) => {
+    const origin = req.headers.origin;
+    const host = req.get('host');
+
+    if (!origin) {
+      return callback(null, { origin: true, credentials: true });
+    }
+
+    if (host && (origin === `http://${host}` || origin === `https://${host}`)) {
+      return callback(null, { origin: true, credentials: true });
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, { origin: true, credentials: true });
+    }
+
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      (origin.includes('localhost') || origin.includes('127.0.0.1'))
+    ) {
+      return callback(null, { origin: true, credentials: true });
+    }
+
+    return callback(null, { origin: false });
   };
 
-  app.use(cors(corsOptions));
+  app.use('/api', cors(corsOptionsDelegate));
   app.use(express.json());
   app.use(morgan('dev'));
 
