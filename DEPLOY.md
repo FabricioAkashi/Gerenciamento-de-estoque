@@ -26,11 +26,12 @@ npm start
 
 ### Variaveis de ambiente
 
-Configure:
+Configure obrigatoriamente:
 
 ```env
 MONGODB_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/estoque_lanchonete?appName=Cluster0
 NODE_ENV=production
+AUTH_SECRET=uma-chave-longa-e-aleatoria-com-mais-de-32-caracteres
 ```
 
 Opcional:

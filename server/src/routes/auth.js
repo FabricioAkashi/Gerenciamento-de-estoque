@@ -1,9 +1,33 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAdmin, requireAuth } from '../middleware/auth.js';
 import { Usuario } from '../models/Usuario.js';
 import { criarToken } from '../utils/security.js';
 
 const router = Router();
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Muitas tentativas de login. Aguarde 15 minutos antes de tentar novamente.' }
+});
+
+const setupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Muitas tentativas de inicializacao. Tente mais tarde.' }
+});
+
+function validarComplexidadeSenha(senha) {
+  if (!senha || typeof senha !== 'string' || senha.length < 8) {
+    return 'A senha deve ter pelo menos 8 caracteres.';
+  }
+  return null;
+}
 
 function usuarioSeguro(usuario) {
   return usuario.toSafeJSON();
@@ -32,7 +56,7 @@ router.get('/status', async (req, res, next) => {
   }
 });
 
-router.post('/setup', async (req, res, next) => {
+router.post('/setup', setupLimiter, async (req, res, next) => {
   try {
     const totalUsuarios = await Usuario.countDocuments();
 
@@ -41,13 +65,14 @@ router.post('/setup', async (req, res, next) => {
     }
 
     const { nome, email, senha } = req.body;
+    const erroSenha = validarComplexidadeSenha(senha);
 
-    if (!nome || !email || !senha || senha.length < 6) {
-      return res.status(400).json({ message: 'Informe nome, email e senha com pelo menos 6 caracteres.' });
+    if (!nome || !email || erroSenha) {
+      return res.status(400).json({ message: erroSenha || 'Informe nome e email validos.' });
     }
 
     const usuario = new Usuario({ nome, email, papel: 'admin' });
-    usuario.definirSenha(senha);
+    await usuario.definirSenha(senha);
     await usuario.save();
 
     respostaComToken(res, usuario);
@@ -56,12 +81,14 @@ router.post('/setup', async (req, res, next) => {
   }
 });
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const { email, senha } = req.body;
     const usuario = await Usuario.findOne({ email: String(email || '').toLowerCase().trim() });
 
-    if (!usuario || !usuario.ativo || !usuario.validarSenha(senha)) {
+    const senhaCorreta = usuario && usuario.ativo ? await usuario.validarSenha(senha) : false;
+
+    if (!usuario || !usuario.ativo || !senhaCorreta) {
       return res.status(401).json({ message: 'Email ou senha invalidos.' });
     }
 
@@ -87,13 +114,14 @@ router.get('/usuarios', requireAuth, requireAdmin, async (req, res, next) => {
 router.post('/usuarios', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const { nome, email, senha, papel = 'operador' } = req.body;
+    const erroSenha = validarComplexidadeSenha(senha);
 
-    if (!nome || !email || !senha || senha.length < 6) {
-      return res.status(400).json({ message: 'Informe nome, email e senha com pelo menos 6 caracteres.' });
+    if (!nome || !email || erroSenha) {
+      return res.status(400).json({ message: erroSenha || 'Informe nome e email validos.' });
     }
 
     const usuario = new Usuario({ nome, email, papel });
-    usuario.definirSenha(senha);
+    await usuario.definirSenha(senha);
     await usuario.save();
 
     res.status(201).json(usuarioSeguro(usuario));
@@ -110,7 +138,8 @@ router.put('/usuarios/:id', requireAuth, requireAdmin, async (req, res, next) =>
   try {
     const { nome, email, senha, papel, ativo, senhaConfirmacao } = req.body;
 
-    if (!req.user.validarSenha(senhaConfirmacao)) {
+    const confirmacaoValida = await req.user.validarSenha(senhaConfirmacao);
+    if (!confirmacaoValida) {
       return res.status(401).json({ message: 'Confirme com a sua senha de administrador.' });
     }
 
@@ -134,7 +163,13 @@ router.put('/usuarios/:id', requireAuth, requireAdmin, async (req, res, next) =>
     if (email) usuario.email = email;
     if (papel) usuario.papel = papel;
     if (typeof ativo === 'boolean') usuario.ativo = ativo;
-    if (senha) usuario.definirSenha(senha);
+    if (senha) {
+      const erroSenha = validarComplexidadeSenha(senha);
+      if (erroSenha) {
+        return res.status(400).json({ message: erroSenha });
+      }
+      await usuario.definirSenha(senha);
+    }
 
     await usuario.save();
     res.json(usuarioSeguro(usuario));

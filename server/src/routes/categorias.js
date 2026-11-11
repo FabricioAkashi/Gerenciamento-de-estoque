@@ -15,7 +15,11 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', requireAdmin, async (req, res, next) => {
   try {
-    const categoria = await Categoria.create(req.body);
+    const { nome, descricao } = req.body;
+    const categoria = await Categoria.create({
+      nome: String(nome || '').trim(),
+      descricao: String(descricao || '').trim()
+    });
     res.status(201).json(categoria);
   } catch (error) {
     next(error);
@@ -24,7 +28,12 @@ router.post('/', requireAdmin, async (req, res, next) => {
 
 router.put('/:id', requireAdmin, async (req, res, next) => {
   try {
-    const categoria = await Categoria.findByIdAndUpdate(req.params.id, req.body, {
+    const { nome, descricao } = req.body;
+    const dados = {};
+    if (nome !== undefined) dados.nome = String(nome).trim();
+    if (descricao !== undefined) dados.descricao = String(descricao).trim();
+
+    const categoria = await Categoria.findByIdAndUpdate(req.params.id, dados, {
       new: true,
       runValidators: true
     });

@@ -10,3 +10,5 @@ services:
         value: production
       - key: MONGODB_URI
         sync: false
+      - key: AUTH_SECRET
+        generateValue: true

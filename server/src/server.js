@@ -1,10 +1,12 @@
 import 'dotenv/config';
 import { connectDatabase } from './config/database.js';
 import { createApp } from './app.js';
+import { segredoToken } from './utils/security.js';
 
 const port = process.env.PORT || 4000;
 
 try {
+  segredoToken();
   await connectDatabase(process.env.MONGODB_URI);
   const app = createApp();
 

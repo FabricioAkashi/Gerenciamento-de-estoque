@@ -1,8 +1,10 @@
 import cors from 'cors';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import helmet from 'helmet';
 import morgan from 'morgan';
 import { requireAuth } from './middleware/auth.js';
 import alertasRouter from './routes/alertas.js';
@@ -21,27 +23,56 @@ const clientDistPath = path.resolve(__dirname, '../../client/dist');
 export function createApp() {
   const app = express();
 
-  const corsOptions =
-    process.env.NODE_ENV === 'production'
-      ? {}
-      : { origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' };
+  app.set('trust proxy', 1);
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: false
+    })
+  );
+
+  const allowedOrigins = process.env.CLIENT_ORIGIN
+    ? process.env.CLIENT_ORIGIN.split(',').map((o) => o.trim())
+    : ['http://localhost:5173'];
+
+  const corsOptions = {
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Bloqueado pela politica de CORS: origem nao autorizada.'));
+    },
+    credentials: true
+  };
 
   app.use(cors(corsOptions));
   app.use(express.json());
   app.use(morgan('dev'));
 
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Limite de requisicoes excedido. Aguarde alguns minutos.' }
+  });
+
+  app.use('/api', apiLimiter);
+
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
   });
 
-  app.get('/api/deploy-check', (req, res) => {
-    res.json({
-      status: 'ok',
-      clientDistPath,
-      indexExists: fs.existsSync(path.join(clientDistPath, 'index.html')),
-      nodeEnv: process.env.NODE_ENV || 'development'
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/api/deploy-check', (req, res) => {
+      res.json({
+        status: 'ok',
+        clientDistPath,
+        indexExists: fs.existsSync(path.join(clientDistPath, 'index.html')),
+        nodeEnv: process.env.NODE_ENV || 'development'
+      });
     });
-  });
+  }
 
   app.use('/api/auth', authRouter);
 

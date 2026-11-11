@@ -32,12 +32,12 @@ const usuarioSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-usuarioSchema.methods.definirSenha = function definirSenha(senha) {
-  this.senhaHash = criarHashSenha(senha);
+usuarioSchema.methods.definirSenha = async function definirSenha(senha) {
+  this.senhaHash = await criarHashSenha(senha);
 };
 
-usuarioSchema.methods.validarSenha = function validarSenha(senha) {
-  return verificarSenha(senha, this.senhaHash);
+usuarioSchema.methods.validarSenha = async function validarSenha(senha) {
+  return await verificarSenha(senha, this.senhaHash);
 };
 
 usuarioSchema.methods.toSafeJSON = function toSafeJSON() {

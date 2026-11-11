@@ -652,11 +652,11 @@ export default function App() {
               Senha
               <input
                 required
-                minLength={6}
+                minLength={setupNecessario ? 8 : 1}
                 type="password"
                 value={loginForm.senha}
                 onChange={(event) => setLoginForm({ ...loginForm, senha: event.target.value })}
-                placeholder="Minimo 6 caracteres"
+                placeholder={setupNecessario ? 'Minimo 8 caracteres' : 'Sua senha'}
               />
             </label>
             <button className="primary-button" disabled={salvando} type="submit">
@@ -1151,11 +1151,11 @@ export default function App() {
                   Senha {usuarioEditando ? 'nova' : ''}
                   <input
                     required={!usuarioEditando}
-                    minLength={6}
+                    minLength={8}
                     type="password"
                     value={usuarioForm.senha}
                     onChange={(event) => setUsuarioForm({ ...usuarioForm, senha: event.target.value })}
-                    placeholder={usuarioEditando ? 'Deixe em branco para manter' : 'Minimo 6 caracteres'}
+                    placeholder={usuarioEditando ? 'Deixe em branco para manter' : 'Minimo 8 caracteres'}
                   />
                 </label>
               </div>
@@ -1296,11 +1296,10 @@ export default function App() {
               <label>
                 Usuario
                 <input
-                  required
-                  value={movimentacao.usuario}
-                  onChange={(event) =>
-                    setMovimentacao({ ...movimentacao, usuario: event.target.value })
-                  }
+                  disabled
+                  readOnly
+                  value={usuarioLogado?.nome || 'Usuario atual'}
+                  title="A autoria e registrada automaticamente a partir da sua conta"
                 />
               </label>
             </div>
