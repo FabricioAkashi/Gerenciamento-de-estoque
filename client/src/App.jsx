@@ -722,7 +722,7 @@ export default function App() {
         />
       </section>
 
-      <section className="work-grid">
+      <section className={`work-grid ${!admin ? 'single-column' : ''}`}>
         <div className="panel panel-wide">
           <div className="panel-header inventory-header">
             <div>
@@ -799,7 +799,7 @@ export default function App() {
               </thead>
               <tbody>
                 {produtosFiltrados.map((item) => (
-                  <tr className={admin ? "clickable-row" : undefined} key={item._id} onClick={() => abrirEdicaoProduto(item)}>
+                  <tr className={admin ? "clickable-row" : undefined} key={item._id} onClick={admin ? () => abrirEdicaoProduto(item) : undefined}>
                     <td>
                       <strong>{item.nome}</strong>
                       <span>{item.unidadeMedida}</span>

@@ -375,6 +375,22 @@ h2 {
   margin-bottom: 22px;
 }
 
+.work-grid.single-column,
+.work-grid:has(> :only-child) {
+  grid-template-columns: 1fr;
+}
+
+.work-grid.single-column .product-filters,
+.work-grid:has(> :only-child) .product-filters {
+  width: 100%;
+}
+
+.work-grid.single-column table,
+.work-grid:has(> :only-child) table {
+  min-width: 680px;
+  width: 100%;
+}
+
 .bottom-grid {
   grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
 }
@@ -470,6 +486,7 @@ h2 {
   width: 100%;
   cursor: pointer;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .sort-button span {
@@ -517,6 +534,7 @@ th {
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
   padding: 12px 14px;
+  white-space: nowrap;
 }
 
 td {
