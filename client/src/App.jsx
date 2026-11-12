@@ -8,6 +8,8 @@ import {
   Moon,
   ShieldCheck,
   PackagePlus,
+  PanelRightClose,
+  Plus,
   RefreshCw,
   Save,
   Search,
@@ -105,6 +107,7 @@ export default function App() {
   const [produtoEditando, setProdutoEditando] = useState(null);
   const [produtoEdicao, setProdutoEdicao] = useState(null);
   const [aba, setAba] = useState('produto');
+  const [painelCadastroAberto, setPainelCadastroAberto] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState('');
@@ -722,12 +725,25 @@ export default function App() {
         />
       </section>
 
-      <section className={`work-grid ${!admin ? 'single-column' : ''}`}>
+      <section className={`work-grid ${(!admin || !painelCadastroAberto) ? 'single-column' : ''}`}>
         <div className="panel panel-wide">
           <div className="panel-header inventory-header">
-            <div>
-              <span className="eyebrow">Inventario</span>
-              <h2>Produtos</h2>
+            <div className="inventory-title-bar">
+              <div>
+                <span className="eyebrow">Inventario</span>
+                <h2>Produtos</h2>
+              </div>
+              {admin && (
+                <button
+                  className={`toggle-cadastrar-btn ${painelCadastroAberto ? 'active' : ''}`}
+                  onClick={() => setPainelCadastroAberto((atual) => !atual)}
+                  title={painelCadastroAberto ? 'Ocultar formulário de cadastro' : 'Abrir formulário de cadastro'}
+                  type="button"
+                >
+                  {painelCadastroAberto ? <PanelRightClose size={16} /> : <Plus size={16} />}
+                  <span>{painelCadastroAberto ? 'Ocultar cadastro' : 'Adicionar dados'}</span>
+                </button>
+              )}
             </div>
             <div className="product-filters">
               <label className="search-box">
@@ -842,13 +858,21 @@ export default function App() {
           )}
         </div>
 
-        {admin && (
-        <aside className="panel">
+        {admin && painelCadastroAberto && (
+        <aside className="panel aside-form-panel">
           <div className="panel-header">
             <div>
               <span className="eyebrow">Cadastro</span>
               <h2>Adicionar dados</h2>
             </div>
+            <button
+              className="icon-button"
+              onClick={() => setPainelCadastroAberto(false)}
+              title="Fechar painel de cadastro"
+              type="button"
+            >
+              <X size={18} />
+            </button>
           </div>
 
           <div className="tabs">

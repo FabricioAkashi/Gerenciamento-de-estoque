@@ -420,6 +420,50 @@ h2 {
   gap: 16px;
 }
 
+.inventory-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+}
+
+.toggle-cadastrar-btn {
+  align-items: center;
+  background: var(--primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--primary-text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.86rem;
+  font-weight: 600;
+  gap: 8px;
+  letter-spacing: 0.02em;
+  min-height: 38px;
+  padding: 0 16px;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-subtle);
+  white-space: nowrap;
+}
+
+.toggle-cadastrar-btn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.toggle-cadastrar-btn.active {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-body);
+}
+
+.toggle-cadastrar-btn.active:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text-main);
+}
+
 .product-filters {
   display: grid;
   gap: 10px;
@@ -1226,6 +1270,11 @@ textarea:disabled {
 }
 
 @media (max-width: 700px) {
+  .inventory-title-bar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
+  }
   .app-shell {
     padding: 20px 14px;
   }
