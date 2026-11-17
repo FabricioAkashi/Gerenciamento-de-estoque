@@ -371,7 +371,7 @@ h2 {
 /* Painéis Principais */
 .work-grid {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   margin-bottom: 22px;
   width: 100%;
 }
@@ -380,6 +380,7 @@ h2 {
   flex: 1 1 0%;
   min-width: 0;
   width: 100%;
+  min-height: 560px;
   transition: flex 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -398,6 +399,9 @@ h2 {
 .aside-form-panel {
   box-sizing: border-box;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
   transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
               min-width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
               max-width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
@@ -424,10 +428,10 @@ h2 {
 }
 
 .aside-form-panel.open {
-  flex: 0 0 380px;
-  width: 380px;
-  min-width: 380px;
-  max-width: 380px;
+  flex: 0 0 420px;
+  width: 420px;
+  min-width: 420px;
+  max-width: 420px;
   margin-left: 20px;
   padding: 24px;
   border: 1px solid var(--border);
@@ -438,8 +442,11 @@ h2 {
 }
 
 .aside-form-inner {
-  width: 330px;
-  min-width: 330px;
+  width: 370px;
+  min-width: 370px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   box-sizing: border-box;
   transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1),
               opacity 0.45s ease;
@@ -1365,6 +1372,7 @@ textarea:disabled {
     max-width: 100%;
     margin-left: 0;
     margin-top: 20px;
+    min-height: auto;
   }
 
   .aside-form-panel.open .aside-form-inner {
