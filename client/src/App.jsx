@@ -860,7 +860,8 @@ export default function App() {
 
         {admin && (
         <aside className={`panel aside-form-panel ${painelCadastroAberto ? 'open' : 'closed'}`}>
-          <div className="panel-header">
+          <div className="aside-form-inner">
+            <div className="panel-header">
             <div>
               <span className="eyebrow">Cadastro</span>
               <h2>Adicionar dados</h2>
@@ -1071,6 +1072,7 @@ export default function App() {
               </button>
             </form>
           )}
+          </div>
         </aside>
         )}
       </section>
