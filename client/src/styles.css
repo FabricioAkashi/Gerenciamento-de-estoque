@@ -372,12 +372,25 @@ h2 {
 /* Painéis Principais */
 .work-grid {
   grid-template-columns: minmax(0, 1.75fr) minmax(360px, 0.85fr);
+  gap: 20px;
   margin-bottom: 22px;
+  transition: grid-template-columns 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              gap 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.work-grid.single-column,
+.work-grid.with-aside {
+  grid-template-columns: minmax(0, 1.75fr) minmax(360px, 0.85fr);
+  gap: 20px;
+}
+
+.work-grid.single-column {
+  grid-template-columns: minmax(0, 1fr) 0fr;
+  gap: 0;
+}
+
 .work-grid:has(> :only-child) {
   grid-template-columns: 1fr;
+  gap: 0;
 }
 
 .work-grid.single-column .product-filters,
@@ -389,6 +402,38 @@ h2 {
 .work-grid:has(> :only-child) table {
   min-width: 680px;
   width: 100%;
+}
+
+/* Animação Suave do Painel de Cadastro */
+.aside-form-panel {
+  min-width: 0;
+  overflow: hidden;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              padding 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              border-width 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.4s ease;
+}
+
+.aside-form-panel.closed {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(30px);
+  padding: 0;
+  border-width: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.aside-form-panel.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  padding: 24px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  pointer-events: auto;
 }
 
 .bottom-grid {
@@ -1070,6 +1115,26 @@ textarea:disabled {
   gap: 10px;
 }
 
+.user-submit-btn {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 7px;
+  width: auto;
+  align-self: flex-start;
+}
+
+.user-cancel-btn {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.82rem;
+  width: auto;
+  align-self: flex-start;
+}
+
 .checkbox-row {
   align-items: center;
   display: flex;
@@ -1262,10 +1327,16 @@ textarea:disabled {
   }
 
   .work-grid,
+  .work-grid.with-aside,
+  .work-grid.single-column,
   .product-filters,
   .bottom-grid,
   .users-grid {
     grid-template-columns: 1fr;
+  }
+
+  .aside-form-panel.closed {
+    display: none;
   }
 }
 

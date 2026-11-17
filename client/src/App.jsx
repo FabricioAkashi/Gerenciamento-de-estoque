@@ -725,7 +725,7 @@ export default function App() {
         />
       </section>
 
-      <section className={`work-grid ${(!admin || !painelCadastroAberto) ? 'single-column' : ''}`}>
+      <section className={`work-grid ${(!admin || !painelCadastroAberto) ? 'single-column' : 'with-aside'}`}>
         <div className="panel panel-wide">
           <div className="panel-header inventory-header">
             <div className="inventory-title-bar">
@@ -858,8 +858,8 @@ export default function App() {
           )}
         </div>
 
-        {admin && painelCadastroAberto && (
-        <aside className="panel aside-form-panel">
+        {admin && (
+        <aside className={`panel aside-form-panel ${painelCadastroAberto ? 'open' : 'closed'}`}>
           <div className="panel-header">
             <div>
               <span className="eyebrow">Cadastro</span>
@@ -1210,12 +1210,12 @@ export default function App() {
                 </>
               )}
               <div className="form-actions">
-                <button className="primary-button" disabled={salvando} type="submit">
-                  <UserPlus size={17} />
+                <button className="primary-button user-submit-btn" disabled={salvando} type="submit">
+                  <UserPlus size={15} />
                   {usuarioEditando ? 'Salvar usuario' : 'Cadastrar usuario'}
                 </button>
                 {usuarioEditando && (
-                  <button className="secondary-button" onClick={cancelarEdicaoUsuario} type="button">
+                  <button className="secondary-button user-cancel-btn" onClick={cancelarEdicaoUsuario} type="button">
                     Cancelar
                   </button>
                 )}
