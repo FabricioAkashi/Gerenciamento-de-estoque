@@ -25,6 +25,7 @@ import React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { EmptyState } from './components/EmptyState.jsx';
 import { MetricCard } from './components/MetricCard.jsx';
+import { ModalDialog } from './components/ModalDialog.jsx';
 import { api, getAuthToken, setAuthToken } from './services/api.js';
 
 const produtoInicial = {
@@ -124,6 +125,7 @@ export default function App() {
   const [setupNecessario, setSetupNecessario] = useState(false);
   const [loginForm, setLoginForm] = useState(loginInicial);
   const [usuarios, setUsuarios] = useState([]);
+  const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [usuarioForm, setUsuarioForm] = useState(usuarioInicial);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
 
@@ -179,8 +181,13 @@ export default function App() {
       return;
     }
 
-    const lista = await api.listarUsuarios();
-    setUsuarios(lista);
+    setCarregandoUsuarios(true);
+    try {
+      const lista = await api.listarUsuarios();
+      setUsuarios(lista);
+    } finally {
+      setCarregandoUsuarios(false);
+    }
   }
 
   async function autenticar(event) {
@@ -301,20 +308,9 @@ export default function App() {
     }
   }, [admin]);
 
-  useEffect(() => {
-    function fecharComEsc(event) {
-      if (event.key === 'Escape') {
-        setMovimentacaoSelecionada(null);
-        setFornecedorSelecionado(null);
-        setProdutoEditando(null);
-        setProdutoEdicao(null);
-        setResumoAberto(false);
-      }
-    }
-
-    window.addEventListener('keydown', fecharComEsc);
-    return () => window.removeEventListener('keydown', fecharComEsc);
-  }, []);
+  const temFiltrosProdutoAtivos = Boolean(
+    busca.trim() || filtrosProduto.categoria || filtrosProduto.fornecedor || filtrosProduto.status
+  );
 
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -606,7 +602,7 @@ export default function App() {
     return (
       <main className="auth-shell">
         <section className="auth-card">
-          <ShieldCheck size={28} />
+          <ShieldCheck aria-hidden="true" size={28} />
           <h1>Carregando acesso</h1>
           <p>Conferindo a sessao do sistema.</p>
         </section>
@@ -619,7 +615,7 @@ export default function App() {
       <main className="auth-shell">
         <section className="auth-card">
           <div className="auth-header">
-            <ShieldCheck size={30} />
+            <ShieldCheck aria-hidden="true" size={30} />
             <div>
               <span className="eyebrow">Acesso seguro</span>
               <h1>{setupNecessario ? 'Criar administrador' : 'Entrar no estoque'}</h1>
@@ -663,7 +659,7 @@ export default function App() {
               />
             </label>
             <button className="primary-button" disabled={salvando} type="submit">
-              <ShieldCheck size={17} />
+              <ShieldCheck aria-hidden="true" size={17} />
               {setupNecessario ? 'Criar admin' : 'Entrar'}
             </button>
           </form>
@@ -681,24 +677,37 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <div className="user-badge">
-            <ShieldCheck size={16} />
+            <ShieldCheck aria-hidden="true" size={16} />
             <span>{usuarioLogado.nome}</span>
             <strong>{usuarioLogado.papel === 'admin' ? 'Admin' : 'Operador'}</strong>
           </div>
           <button
+            aria-label={tema === 'claro' ? 'Usar tema escuro' : 'Usar tema claro'}
             className="theme-switch"
             onClick={() => setTema((atual) => (atual === 'claro' ? 'escuro' : 'claro'))}
             title={tema === 'claro' ? 'Usar tema escuro' : 'Usar tema claro'}
             type="button"
           >
-            {tema === 'claro' ? <Moon size={17} /> : <Sun size={17} />}
+            {tema === 'claro' ? <Moon aria-hidden="true" size={17} /> : <Sun aria-hidden="true" size={17} />}
             <span>{tema === 'claro' ? 'Escuro' : 'Claro'}</span>
           </button>
-          <button className="icon-button" onClick={carregarDados} title="Atualizar dados" type="button">
-            <RefreshCw size={18} />
+          <button
+            aria-label="Atualizar dados"
+            className="icon-button"
+            onClick={carregarDados}
+            title="Atualizar dados"
+            type="button"
+          >
+            <RefreshCw aria-hidden="true" size={18} />
           </button>
-          <button className="icon-button" onClick={sair} title="Sair" type="button">
-            <LogOut size={18} />
+          <button
+            aria-label="Sair"
+            className="icon-button"
+            onClick={sair}
+            title="Sair"
+            type="button"
+          >
+            <LogOut aria-hidden="true" size={18} />
           </button>
         </div>
       </header>
@@ -735,20 +744,29 @@ export default function App() {
               </div>
               {admin && (
                 <button
+                  aria-controls="painel-cadastro"
+                  aria-expanded={painelCadastroAberto}
                   className={`toggle-cadastrar-btn ${painelCadastroAberto ? 'active' : ''}`}
                   onClick={() => setPainelCadastroAberto((atual) => !atual)}
                   title={painelCadastroAberto ? 'Ocultar formulário de cadastro' : 'Abrir formulário de cadastro'}
                   type="button"
                 >
-                  {painelCadastroAberto ? <PanelRightClose size={16} /> : <Plus size={16} />}
+                  {painelCadastroAberto ? (
+                    <PanelRightClose aria-hidden="true" size={16} />
+                  ) : (
+                    <Plus aria-hidden="true" size={16} />
+                  )}
                   <span>{painelCadastroAberto ? 'Ocultar cadastro' : 'Adicionar dados'}</span>
                 </button>
               )}
             </div>
             <div className="product-filters">
               <label className="search-box">
-                <Search size={17} />
+                <span className="sr-only">Buscar produto, categoria ou fornecedor</span>
+                <Search aria-hidden="true" size={17} />
                 <input
+                  aria-label="Buscar produto, categoria ou fornecedor"
+                  type="search"
                   value={busca}
                   onChange={(event) => setBusca(event.target.value)}
                   placeholder="Buscar produto, categoria ou fornecedor"
@@ -827,21 +845,41 @@ export default function App() {
                     <td>{moeda(item.precoUnitario)}</td>
                     <td>
                       <span className={`status ${item.emAlerta ? 'danger' : 'ok'}`}>
-                        {item.emAlerta ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+                        {item.emAlerta ? (
+                          <AlertTriangle aria-hidden="true" size={15} />
+                        ) : (
+                          <CheckCircle2 aria-hidden="true" size={15} />
+                        )}
                         {item.emAlerta ? 'Alerta' : 'OK'}
                       </span>
                     </td>
                     {admin && (
                       <td>
-                        <button
-                          className="table-action danger"
-                          onClick={(event) => { event.stopPropagation(); removerProduto(item); }}
-                          title="Remover produto"
-                          type="button"
-                        >
-                          <Trash2 size={15} />
-                          Remover
-                        </button>
+                        <div className="table-actions-group">
+                          <button
+                            className="table-action"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              abrirEdicaoProduto(item);
+                            }}
+                            title={`Editar ${item.nome}`}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="table-action danger"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removerProduto(item);
+                            }}
+                            title={`Remover ${item.nome}`}
+                            type="button"
+                          >
+                            <Trash2 aria-hidden="true" size={15} />
+                            Remover
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -850,16 +888,40 @@ export default function App() {
             </table>
           </div>
 
+          {carregando && (
+            <div className="loading-state" role="status" aria-live="polite">
+              Carregando produtos do estoque...
+            </div>
+          )}
+
           {!carregando && produtosFiltrados.length === 0 && (
-            <EmptyState
-              title="Nenhum produto encontrado"
-              text="Cadastre produtos ou ajuste a busca para ver o estoque."
-            />
+            temFiltrosProdutoAtivos ? (
+              <EmptyState
+                actionLabel="Limpar filtros"
+                onAction={limparFiltrosProduto}
+                text="Limpe os filtros ativos para voltar a ver todos os produtos cadastrados."
+                title="Nenhum produto corresponde aos filtros"
+              />
+            ) : (
+              <EmptyState
+                text={
+                  admin
+                    ? 'Use o botao Adicionar dados para cadastrar o primeiro produto.'
+                    : 'Nenhum item cadastrado no estoque no momento.'
+                }
+                title="Nenhum produto cadastrado"
+              />
+            )
           )}
         </div>
 
         {admin && (
-        <aside className={`panel aside-form-panel ${painelCadastroAberto ? 'open' : 'closed'}`}>
+        <aside
+          aria-hidden={!painelCadastroAberto}
+          className={`panel aside-form-panel ${painelCadastroAberto ? 'open' : 'closed'}`}
+          id="painel-cadastro"
+          inert={!painelCadastroAberto ? true : undefined}
+        >
           <div className="aside-form-inner">
             <div className="panel-header">
             <div>
@@ -867,32 +929,45 @@ export default function App() {
               <h2>Adicionar dados</h2>
             </div>
             <button
+              aria-label="Fechar painel de cadastro"
               className="icon-button"
               onClick={() => setPainelCadastroAberto(false)}
               title="Fechar painel de cadastro"
               type="button"
             >
-              <X size={18} />
+              <X aria-hidden="true" size={18} />
             </button>
           </div>
 
-          <div className="tabs">
-            <button className={aba === 'produto' ? 'active' : ''} onClick={() => setAba('produto')}>
-              <Boxes size={16} />
+          <div aria-label="Tipo de cadastro" className="tabs" role="tablist">
+            <button
+              aria-selected={aba === 'produto'}
+              className={aba === 'produto' ? 'active' : ''}
+              onClick={() => setAba('produto')}
+              role="tab"
+              type="button"
+            >
+              <Boxes aria-hidden="true" size={16} />
               Produto
             </button>
             <button
+              aria-selected={aba === 'categoria'}
               className={aba === 'categoria' ? 'active' : ''}
               onClick={() => setAba('categoria')}
+              role="tab"
+              type="button"
             >
-              <SlidersHorizontal size={16} />
+              <SlidersHorizontal aria-hidden="true" size={16} />
               Categoria
             </button>
             <button
+              aria-selected={aba === 'fornecedor'}
               className={aba === 'fornecedor' ? 'active' : ''}
               onClick={() => setAba('fornecedor')}
+              role="tab"
+              type="button"
             >
-              <Truck size={16} />
+              <Truck aria-hidden="true" size={16} />
               Fornecedor
             </button>
           </div>
@@ -984,7 +1059,7 @@ export default function App() {
                 </label>
               </div>
               <button className="primary-button" disabled={salvando}>
-                <Save size={17} />
+                <Save aria-hidden="true" size={17} />
                 Salvar produto
               </button>
             </form>
@@ -1012,7 +1087,7 @@ export default function App() {
                 />
               </label>
               <button className="primary-button" disabled={salvando}>
-                <Save size={17} />
+                <Save aria-hidden="true" size={17} />
                 Salvar categoria
               </button>
             </form>
@@ -1067,7 +1142,7 @@ export default function App() {
                 />
               </label>
               <button className="primary-button" disabled={salvando}>
-                <Save size={17} />
+                <Save aria-hidden="true" size={17} />
                 Salvar fornecedor
               </button>
             </form>
@@ -1083,7 +1158,7 @@ export default function App() {
             <span className="eyebrow">Parceiros</span>
             <h2>Fornecedores</h2>
           </div>
-          <Truck size={20} />
+          <Truck aria-hidden="true" size={20} />
         </div>
 
         <div className="table-wrap">
@@ -1102,16 +1177,18 @@ export default function App() {
                   className="clickable-row"
                   key={item._id}
                   onClick={() => setFornecedorSelecionado(item)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      setFornecedorSelecionado(item);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
                 >
                   <td>
-                    <strong>{item.nome}</strong>
+                    <button
+                      className="row-trigger-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setFornecedorSelecionado(item);
+                      }}
+                      type="button"
+                    >
+                      <strong>{item.nome}</strong>
+                    </button>
                     <span>{item.endereco || 'Sem endereco'}</span>
                   </td>
                   <td>{item.telefone || '-'}</td>
@@ -1122,6 +1199,12 @@ export default function App() {
             </tbody>
           </table>
         </div>
+
+        {carregando && (
+          <div className="loading-state" role="status" aria-live="polite">
+            Carregando fornecedores...
+          </div>
+        )}
 
         {!carregando && fornecedores.length === 0 && (
           <EmptyState
@@ -1138,7 +1221,7 @@ export default function App() {
               <span className="eyebrow">Administracao</span>
               <h2>Usuarios do sistema</h2>
             </div>
-            <Users size={20} />
+            <Users aria-hidden="true" size={20} />
           </div>
 
           <div className="users-grid">
@@ -1213,7 +1296,7 @@ export default function App() {
               )}
               <div className="form-actions">
                 <button className="primary-button user-submit-btn" disabled={salvando} type="submit">
-                  <UserPlus size={15} />
+                  <UserPlus aria-hidden="true" size={15} />
                   {usuarioEditando ? 'Salvar usuario' : 'Cadastrar usuario'}
                 </button>
                 {usuarioEditando && (
@@ -1224,38 +1307,53 @@ export default function App() {
               </div>
             </form>
 
-            <div className="table-wrap users-table-wrap">
-              <table className="compact-table">
-                <thead>
-                  <tr>
-                    <th>Usuario</th>
-                    <th>Perfil</th>
-                    <th>Status</th>
-                    <th>Acoes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usuarios.map((item) => (
-                    <tr key={item._id}>
-                      <td>
-                        <strong>{item.nome}</strong>
-                        <span>{item.email}</span>
-                      </td>
-                      <td>{item.papel === 'admin' ? 'Admin' : 'Operador'}</td>
-                      <td>
-                        <span className={`status ${item.ativo ? 'ok' : 'danger'}`}>
-                          {item.ativo ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </td>
-                      <td>
-                        <button className="table-action" onClick={() => editarUsuario(item)} type="button">
-                          Editar
-                        </button>
-                      </td>
+            <div>
+              <div className="table-wrap users-table-wrap">
+                <table className="compact-table">
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Perfil</th>
+                      <th>Status</th>
+                      <th>Acoes</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {usuarios.map((item) => (
+                      <tr key={item._id}>
+                        <td>
+                          <strong>{item.nome}</strong>
+                          <span>{item.email}</span>
+                        </td>
+                        <td>{item.papel === 'admin' ? 'Admin' : 'Operador'}</td>
+                        <td>
+                          <span className={`status ${item.ativo ? 'ok' : 'danger'}`}>
+                            {item.ativo ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td>
+                          <button className="table-action" onClick={() => editarUsuario(item)} type="button">
+                            Editar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {carregandoUsuarios && (
+                <div className="loading-state" role="status" aria-live="polite">
+                  Carregando usuarios...
+                </div>
+              )}
+
+              {!carregandoUsuarios && usuarios.length === 0 && (
+                <EmptyState
+                  text="Preencha o formulario ao lado para criar o primeiro usuario."
+                  title="Nenhum usuario cadastrado"
+                />
+              )}
             </div>
           </div>
         </section>
@@ -1268,7 +1366,7 @@ export default function App() {
               <span className="eyebrow">Operacao</span>
               <h2>Movimentar estoque</h2>
             </div>
-            <PackagePlus size={20} />
+            <PackagePlus aria-hidden="true" size={20} />
           </div>
 
           <form className="form" onSubmit={salvarMovimentacao}>
@@ -1289,19 +1387,20 @@ export default function App() {
                 ))}
               </select>
             </label>
-            <div className="movement-options">
+            <div aria-label="Tipo de movimentacao" className="movement-options" role="group">
               {[
                 ['entrada', ArrowUp, 'Entrada'],
                 ['saida', ArrowDown, 'Saida'],
                 ['ajuste', SlidersHorizontal, 'Ajuste']
               ].map(([tipo, Icone, label]) => (
                 <button
+                  aria-pressed={movimentacao.tipo === tipo}
                   className={movimentacao.tipo === tipo ? 'active' : ''}
                   key={tipo}
                   onClick={() => setMovimentacao({ ...movimentacao, tipo })}
                   type="button"
                 >
-                  <Icone size={16} />
+                  <Icone aria-hidden="true" size={16} />
                   {label}
                 </button>
               ))}
@@ -1340,7 +1439,7 @@ export default function App() {
               />
             </label>
             <button className="primary-button" disabled={salvando}>
-              <Save size={17} />
+              <Save aria-hidden="true" size={17} />
               Registrar movimentacao
             </button>
           </form>
@@ -1365,7 +1464,7 @@ export default function App() {
                 onClick={() => setMovimentacaoSelecionada(item)}
                 type="button"
               >
-                <span className={`movement-dot ${item.tipo}`} />
+                <span aria-hidden="true" className={`movement-dot ${item.tipo}`} />
                 <div>
                   <strong>{item.produto?.nome || 'Produto removido'}</strong>
                   <p>
@@ -1379,8 +1478,15 @@ export default function App() {
             ))}
           </div>
 
+          {carregando && (
+            <div className="loading-state" role="status" aria-live="polite">
+              Carregando historico de movimentacoes...
+            </div>
+          )}
+
           {totalMovimentacoesOcultas > 0 && (
             <button
+              aria-expanded={mostrarMovimentacoesAntigas}
               className="secondary-button history-toggle"
               onClick={() => setMostrarMovimentacoesAntigas((atual) => !atual)}
               type="button"
@@ -1401,26 +1507,24 @@ export default function App() {
       </section>
 
       {produtoEditando && produtoEdicao && (
-        <div className="modal-backdrop" onClick={fecharEdicaoProduto} role="presentation">
-          <section
-            aria-labelledby="produto-edicao-titulo"
-            aria-modal="true"
-            className="modal-card product-edit-modal"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-          >
+        <ModalDialog
+          className="product-edit-modal"
+          onClose={fecharEdicaoProduto}
+          titleId="produto-edicao-titulo"
+        >
             <div className="modal-header">
               <div>
                 <span className="eyebrow">Confirmar alteracao</span>
                 <h2 id="produto-edicao-titulo">Editar produto</h2>
               </div>
               <button
+                aria-label="Fechar edicao de produto"
                 className="icon-button modal-close"
                 onClick={fecharEdicaoProduto}
                 title="Fechar"
                 type="button"
               >
-                <X size={18} />
+                <X aria-hidden="true" size={18} />
               </button>
             </div>
 
@@ -1527,7 +1631,7 @@ export default function App() {
               </p>
               <div className="form-actions">
                 <button className="primary-button" disabled={salvando} type="submit">
-                  <Save size={17} />
+                  <Save aria-hidden="true" size={17} />
                   Confirmar alteracao
                 </button>
                 <button className="secondary-button" onClick={fecharEdicaoProduto} type="button">
@@ -1535,23 +1639,14 @@ export default function App() {
                 </button>
               </div>
             </form>
-          </section>
-        </div>
+        </ModalDialog>
       )}
 
       {movimentacaoSelecionada && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setMovimentacaoSelecionada(null)}
-          role="presentation"
+        <ModalDialog
+          onClose={() => setMovimentacaoSelecionada(null)}
+          titleId="movimentacao-titulo"
         >
-          <section
-            aria-labelledby="movimentacao-titulo"
-            className="modal-card"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
             <div className="modal-header">
               <div>
                 <span className="eyebrow">Movimentacao</span>
@@ -1560,12 +1655,13 @@ export default function App() {
                 </h2>
               </div>
               <button
+                aria-label="Fechar detalhes da movimentacao"
                 className="icon-button modal-close"
                 onClick={() => setMovimentacaoSelecionada(null)}
                 title="Fechar"
                 type="button"
               >
-                <X size={18} />
+                <X aria-hidden="true" size={18} />
               </button>
             </div>
 
@@ -1600,35 +1696,27 @@ export default function App() {
               <span>Observacao</span>
               <p>{movimentacaoSelecionada.observacao || 'Sem observacao registrada.'}</p>
             </div>
-          </section>
-        </div>
+        </ModalDialog>
       )}
 
       {fornecedorSelecionado && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setFornecedorSelecionado(null)}
-          role="presentation"
+        <ModalDialog
+          onClose={() => setFornecedorSelecionado(null)}
+          titleId="fornecedor-titulo"
         >
-          <section
-            aria-labelledby="fornecedor-titulo"
-            aria-modal="true"
-            className="modal-card"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-          >
             <div className="modal-header">
               <div>
                 <span className="eyebrow">Fornecedor</span>
                 <h2 id="fornecedor-titulo">{fornecedorSelecionado.nome}</h2>
               </div>
               <button
+                aria-label="Fechar detalhes do fornecedor"
                 className="icon-button modal-close"
                 onClick={() => setFornecedorSelecionado(null)}
                 title="Fechar"
                 type="button"
               >
-                <X size={18} />
+                <X aria-hidden="true" size={18} />
               </button>
             </div>
 
@@ -1667,40 +1755,39 @@ export default function App() {
               <span>Endereco</span>
               <p>{fornecedorSelecionado.endereco || 'Sem endereco registrado.'}</p>
             </div>
-          </section>
-        </div>
+        </ModalDialog>
       )}
 
       {resumoAberto && (
-        <div className="modal-backdrop" onClick={() => setResumoAberto(false)} role="presentation">
-          <section
-            aria-labelledby="resumo-titulo"
-            aria-modal="true"
-            className="modal-card summary-modal"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-          >
+        <ModalDialog
+          className="summary-modal"
+          onClose={() => setResumoAberto(false)}
+          titleId="resumo-titulo"
+        >
             <div className="modal-header">
               <div>
                 <span className="eyebrow">Resumo</span>
                 <h2 id="resumo-titulo">Movimentacoes por periodo</h2>
               </div>
               <button
+                aria-label="Fechar resumo"
                 className="icon-button modal-close"
                 onClick={() => setResumoAberto(false)}
                 title="Fechar"
                 type="button"
               >
-                <X size={18} />
+                <X aria-hidden="true" size={18} />
               </button>
             </div>
 
-            <div className="period-tabs">
+            <div aria-label="Periodo do resumo" className="period-tabs" role="tablist">
               {Object.entries(PERIODOS_RESUMO).map(([valor, periodo]) => (
                 <button
+                  aria-selected={periodoResumo === valor}
                   className={periodoResumo === valor ? 'active' : ''}
                   key={valor}
                   onClick={() => setPeriodoResumo(valor)}
+                  role="tab"
                   type="button"
                 >
                   {periodo.label}
@@ -1744,8 +1831,7 @@ export default function App() {
                 <p className="summary-empty">Nenhuma movimentacao nesse periodo.</p>
               )}
             </div>
-          </section>
-        </div>
+        </ModalDialog>
       )}
     </main>
   );
