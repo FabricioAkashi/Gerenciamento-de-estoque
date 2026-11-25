@@ -5,6 +5,8 @@ import {
   ArrowUp,
   Boxes,
   CheckCircle2,
+  Eye,
+  Filter,
   LogOut,
   Minus,
   Moon,
@@ -18,16 +20,20 @@ import {
   Truck,
   X
 } from 'lucide-react';
+import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ContextMenu } from './components/arc/context-menu/context-menu.tsx';
 import { DropdownMenu } from './components/arc/dropdown-menu/dropdown-menu.tsx';
 import { ExpandingSearch } from './components/arc/expanding-search/expanding-search.tsx';
 import { HoldToConfirm } from './components/arc/hold-to-confirm/hold-to-confirm.tsx';
 import Toast from './components/arc/toast/toast.tsx';
+import { AnalyticsPanel } from './components/AnalyticsPanel.jsx';
 import { EmptyState } from './components/EmptyState.jsx';
 import { MetricCard } from './components/MetricCard.jsx';
 import { ModalDialog } from './components/ModalDialog.jsx';
 import { api, getAuthToken, setAuthToken } from './services/api.js';
+import { dataCurta, moeda, numero, rotuloTipoMovimentacao } from './utils/format.js';
 
 const produtoInicial = {
   nome: '',
@@ -43,6 +49,7 @@ const categoriaInicial = { nome: '', descricao: '' };
 const fornecedorInicial = { nome: '', cnpj: '', telefone: '', email: '', endereco: '' };
 const filtrosProdutoInicial = { categoria: '', fornecedor: '', status: '' };
 const LIMITE_MOVIMENTACOES_VISIVEIS = 6;
+const OPCOES_PAGINA_PRODUTOS = [10, 25, 'all'];
 const TEMA_PADRAO = 'claro';
 const PERIODOS_RESUMO = {
   dia: { label: '1 dia', dias: 1 },
@@ -71,31 +78,6 @@ const usuarioInicial = {
   senhaConfirmacao: ''
 };
 
-function moeda(valor) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  }).format(valor || 0);
-}
-
-function dataCurta(valor) {
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(new Date(valor));
-}
-
-function numero(valor) {
-  return Number(valor || 0).toLocaleString('pt-BR');
-}
-
-function rotuloTipoMovimentacao(tipo) {
-  if (tipo === 'entrada') return 'Entrada';
-  if (tipo === 'saida') return 'Saída';
-  if (tipo === 'ajuste') return 'Ajuste';
-  return tipo || '-';
-}
-
 function temaInicial() {
   if (typeof window === 'undefined') {
     return TEMA_PADRAO;
@@ -103,6 +85,27 @@ function temaInicial() {
 
   const temaSalvo = window.localStorage.getItem('tema-estoque');
   return temaSalvo === 'escuro' ? 'escuro' : TEMA_PADRAO;
+}
+
+function painelAnaliticoInicial() {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+
+  const salvo = window.localStorage.getItem('painel-analitico-estoque');
+  if (salvo === 'aberto') return true;
+  if (salvo === 'fechado') return false;
+  return !window.matchMedia('(max-width: 700px)').matches;
+}
+
+function densidadeInicial() {
+  if (typeof window === 'undefined') {
+    return 'padrao';
+  }
+
+  return window.localStorage.getItem('densidade-tabela-produtos') === 'compacto'
+    ? 'compacto'
+    : 'padrao';
 }
 
 export default function App() {
@@ -146,6 +149,15 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches
   );
+  const [painelAnaliticoAberto, setPainelAnaliticoAberto] = useState(painelAnaliticoInicial);
+  const [periodoGraficos, setPeriodoGraficos] = useState(7);
+  const [densidadeProdutos, setDensidadeProdutos] = useState(densidadeInicial);
+  const [itensPorPaginaProdutos, setItensPorPaginaProdutos] = useState(10);
+  const [paginaProdutos, setPaginaProdutos] = useState(1);
+  const [filtroTipoMov, setFiltroTipoMov] = useState('');
+  const [buscaMov, setBuscaMov] = useState('');
+  const [filtroPerfilUsuario, setFiltroPerfilUsuario] = useState('');
+  const [filtroStatusUsuario, setFiltroStatusUsuario] = useState('');
   const [toast, setToast] = useState({ open: false, tone: 'success', title: '', description: '' });
   const quantidadeMovRef = useRef(null);
   const nomeUsuarioRef = useRef(null);
@@ -264,6 +276,11 @@ export default function App() {
     setRemocaoConfirmada(false);
     setModalMovimentacaoAberto(false);
     setPainelCadastroAberto(false);
+    setFiltroTipoMov('');
+    setBuscaMov('');
+    setFiltroPerfilUsuario('');
+    setFiltroStatusUsuario('');
+    setPaginaProdutos(1);
     setToast({ open: false, tone: 'success', title: '', description: '' });
     setMensagem('');
     setErro('');
@@ -376,10 +393,14 @@ export default function App() {
     busca.trim() || filtrosProduto.categoria || filtrosProduto.fornecedor || filtrosProduto.status
   );
 
-  const produtosFiltrados = useMemo(() => {
+  useEffect(() => {
+    setPaginaProdutos(1);
+  }, [busca, filtrosProduto, ordenacaoProdutos, itensPorPaginaProdutos]);
+
+  const produtosBaseStatus = useMemo(() => {
     const termo = busca.trim().toLowerCase();
 
-    const lista = produtos.filter((item) => {
+    return produtos.filter((item) => {
       const correspondeBusca = termo
         ? [item.nome, item.categoria?.nome, item.fornecedor?.nome, item.unidadeMedida]
             .filter(Boolean)
@@ -391,13 +412,41 @@ export default function App() {
       const correspondeFornecedor = filtrosProduto.fornecedor
         ? (item.fornecedor?._id || item.fornecedor) === filtrosProduto.fornecedor
         : true;
-      const correspondeStatus = filtrosProduto.status
-        ? filtrosProduto.status === 'alerta'
-          ? item.emAlerta
-          : !item.emAlerta
-        : true;
 
-      return correspondeBusca && correspondeCategoria && correspondeFornecedor && correspondeStatus;
+      return correspondeBusca && correspondeCategoria && correspondeFornecedor;
+    });
+  }, [busca, filtrosProduto.categoria, filtrosProduto.fornecedor, produtos]);
+
+  const contagensStatusProdutos = useMemo(() => {
+    let alerta = 0;
+    let zerado = 0;
+    let ok = 0;
+
+    for (const item of produtosBaseStatus) {
+      if (Number(item.quantidadeAtual || 0) <= 0) {
+        zerado += 1;
+      }
+      if (item.emAlerta) {
+        alerta += 1;
+      } else {
+        ok += 1;
+      }
+    }
+
+    return {
+      todos: produtosBaseStatus.length,
+      alerta,
+      zerado,
+      ok
+    };
+  }, [produtosBaseStatus]);
+
+  const produtosFiltrados = useMemo(() => {
+    const lista = produtosBaseStatus.filter((item) => {
+      if (filtrosProduto.status === 'alerta') return Boolean(item.emAlerta);
+      if (filtrosProduto.status === 'zerado') return Number(item.quantidadeAtual || 0) <= 0;
+      if (filtrosProduto.status === 'ok') return !item.emAlerta;
+      return true;
     });
 
     const valorCampo = (item) => {
@@ -422,7 +471,30 @@ export default function App() {
 
       return String(valorA).localeCompare(String(valorB), 'pt-BR', { sensitivity: 'base' }) * direcao;
     });
-  }, [busca, filtrosProduto, ordenacaoProdutos, produtos]);
+  }, [filtrosProduto.status, ordenacaoProdutos, produtosBaseStatus]);
+
+  const totalProdutosFiltrados = produtosFiltrados.length;
+  const tamanhoPaginaProdutos =
+    itensPorPaginaProdutos === 'all'
+      ? Math.max(totalProdutosFiltrados, 1)
+      : Number(itensPorPaginaProdutos);
+  const totalPaginasProdutos = Math.max(1, Math.ceil(totalProdutosFiltrados / tamanhoPaginaProdutos));
+  const paginaSeguraProdutos = Math.min(paginaProdutos, totalPaginasProdutos);
+  const indiceInicioProdutos = (paginaSeguraProdutos - 1) * tamanhoPaginaProdutos;
+  const produtosPaginados =
+    itensPorPaginaProdutos === 'all'
+      ? produtosFiltrados
+      : produtosFiltrados.slice(indiceInicioProdutos, indiceInicioProdutos + tamanhoPaginaProdutos);
+  const inicioMostradoProdutos = totalProdutosFiltrados === 0 ? 0 : indiceInicioProdutos + 1;
+  const fimMostradoProdutos = Math.min(
+    indiceInicioProdutos + produtosPaginados.length,
+    totalProdutosFiltrados
+  );
+
+  function alternarDensidadeProdutos(novaDensidade) {
+    setDensidadeProdutos(novaDensidade);
+    window.localStorage.setItem('densidade-tabela-produtos', novaDensidade);
+  }
 
   function alternarOrdenacao(campo) {
     setOrdenacaoProdutos((atual) => ({
@@ -445,14 +517,119 @@ export default function App() {
     setOrdenacaoProdutos({ campo: 'nome', direcao: 'asc' });
   }
 
+  function alternarPainelAnalitico() {
+    setPainelAnaliticoAberto((atual) => {
+      const proximo = !atual;
+      window.localStorage.setItem('painel-analitico-estoque', proximo ? 'aberto' : 'fechado');
+      return proximo;
+    });
+  }
+
+  function alternarFiltroCategoria(categoriaId) {
+    setFiltrosProduto((atual) => ({
+      ...atual,
+      categoria: atual.categoria === categoriaId ? '' : categoriaId
+    }));
+  }
+
+  const movimentacoesBaseBusca = useMemo(() => {
+    const termo = buscaMov.trim().toLowerCase();
+    if (!termo) {
+      return movimentacoes;
+    }
+
+    return movimentacoes.filter((item) =>
+      [
+        item.produto?.nome,
+        item.usuario,
+        item.observacao,
+        rotuloTipoMovimentacao(item.tipo)
+      ]
+        .filter(Boolean)
+        .some((valor) => valor.toLowerCase().includes(termo))
+    );
+  }, [buscaMov, movimentacoes]);
+
+  const contagensTipoMov = useMemo(() => {
+    const resumo = {
+      todas: movimentacoesBaseBusca.length,
+      entrada: 0,
+      saida: 0,
+      ajuste: 0
+    };
+
+    for (const item of movimentacoesBaseBusca) {
+      if (item.tipo in resumo) {
+        resumo[item.tipo] += 1;
+      }
+    }
+
+    return resumo;
+  }, [movimentacoesBaseBusca]);
+
+  const movimentacoesFiltradas = useMemo(() => {
+    if (!filtroTipoMov) {
+      return movimentacoesBaseBusca;
+    }
+
+    return movimentacoesBaseBusca.filter((item) => item.tipo === filtroTipoMov);
+  }, [filtroTipoMov, movimentacoesBaseBusca]);
+
+  const temFiltrosMovAtivos = Boolean(filtroTipoMov || buscaMov.trim());
+
   const movimentacoesVisiveis = mostrarMovimentacoesAntigas
-    ? movimentacoes
-    : movimentacoes.slice(0, LIMITE_MOVIMENTACOES_VISIVEIS);
+    ? movimentacoesFiltradas
+    : movimentacoesFiltradas.slice(0, LIMITE_MOVIMENTACOES_VISIVEIS);
 
   const totalMovimentacoesOcultas = Math.max(
-    movimentacoes.length - LIMITE_MOVIMENTACOES_VISIVEIS,
+    movimentacoesFiltradas.length - LIMITE_MOVIMENTACOES_VISIVEIS,
     0
   );
+
+  function limparFiltrosMov() {
+    setFiltroTipoMov('');
+    setBuscaMov('');
+  }
+
+  const movimentacoesPorUsuario = useMemo(() => {
+    const mapa = new Map();
+    for (const item of movimentacoes) {
+      const chave = String(item.usuario || '').trim().toLowerCase();
+      if (!chave) continue;
+      mapa.set(chave, (mapa.get(chave) || 0) + 1);
+    }
+    return mapa;
+  }, [movimentacoes]);
+
+  const usuariosFiltrados = useMemo(
+    () =>
+      usuarios.filter((item) => {
+        const correspondePerfil = filtroPerfilUsuario ? item.papel === filtroPerfilUsuario : true;
+        const correspondeStatus = filtroStatusUsuario
+          ? filtroStatusUsuario === 'ativo'
+            ? Boolean(item.ativo)
+            : !item.ativo
+          : true;
+        return correspondePerfil && correspondeStatus;
+      }),
+    [filtroPerfilUsuario, filtroStatusUsuario, usuarios]
+  );
+
+  const temFiltrosUsuarioAtivos = Boolean(filtroPerfilUsuario || filtroStatusUsuario);
+
+  function limparFiltrosUsuarios() {
+    setFiltroPerfilUsuario('');
+    setFiltroStatusUsuario('');
+  }
+
+  function rolarParaSecao(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const reduzir =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduzir ? 'auto' : 'smooth', block: 'start' });
+  }
 
   const resumoMovimentacoes = useMemo(() => {
     const periodo = PERIODOS_RESUMO[periodoResumo];
@@ -905,182 +1082,193 @@ export default function App() {
         </button>
       </div>
 
-      {aba === 'produto' && (
-        <form className="form" onSubmit={salvarProduto}>
-          <label>
-            Nome
-            <input
-              required
-              value={produto.nome}
-              onChange={(event) => atualizarProduto('nome', event.target.value)}
-              placeholder="Ex.: Hambúrguer bovino"
-            />
-          </label>
-          <div className="form-row">
-            <label>
-              Categoria
-              <select
-                required
-                value={produto.categoria}
-                onChange={(event) => atualizarProduto('categoria', event.target.value)}
-              >
-                <option value="">Selecione</option>
-                {categorias.map((item) => (
-                  <option key={item._id} value={item._id}>
-                    {item.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Fornecedor
-              <select
-                required
-                value={produto.fornecedor}
-                onChange={(event) => atualizarProduto('fornecedor', event.target.value)}
-              >
-                <option value="">Selecione</option>
-                {fornecedores.map((item) => (
-                  <option key={item._id} value={item._id}>
-                    {item.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="form-row">
-            <label>
-              Quantidade
-              <input
-                min="0"
-                required
-                type="number"
-                value={produto.quantidadeAtual}
-                onChange={(event) => atualizarProduto('quantidadeAtual', event.target.value)}
-              />
-            </label>
-            <label>
-              Unidade
-              <input
-                required
-                value={produto.unidadeMedida}
-                onChange={(event) => atualizarProduto('unidadeMedida', event.target.value)}
-              />
-            </label>
-          </div>
-          <div className="form-row">
-            <label>
-              Estoque mínimo
-              <input
-                min="0"
-                required
-                type="number"
-                value={produto.estoqueMinimo}
-                onChange={(event) => atualizarProduto('estoqueMinimo', event.target.value)}
-              />
-            </label>
-            <label>
-              Preço unitário
-              <input
-                min="0"
-                required
-                step="0.01"
-                type="number"
-                value={produto.precoUnitario}
-                onChange={(event) => atualizarProduto('precoUnitario', event.target.value)}
-              />
-            </label>
-          </div>
-          <button className="primary-button" disabled={salvando}>
-            Salvar produto
-          </button>
-        </form>
-      )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          initial={{ opacity: 0, y: 6 }}
+          key={aba}
+          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {aba === 'produto' && (
+            <form className="form" onSubmit={salvarProduto}>
+              <label>
+                Nome
+                <input
+                  required
+                  value={produto.nome}
+                  onChange={(event) => atualizarProduto('nome', event.target.value)}
+                  placeholder="Ex.: Hambúrguer bovino"
+                />
+              </label>
+              <div className="form-row">
+                <label>
+                  Categoria
+                  <select
+                    required
+                    value={produto.categoria}
+                    onChange={(event) => atualizarProduto('categoria', event.target.value)}
+                  >
+                    <option value="">Selecione</option>
+                    {categorias.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Fornecedor
+                  <select
+                    required
+                    value={produto.fornecedor}
+                    onChange={(event) => atualizarProduto('fornecedor', event.target.value)}
+                  >
+                    <option value="">Selecione</option>
+                    {fornecedores.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Quantidade
+                  <input
+                    min="0"
+                    required
+                    type="number"
+                    value={produto.quantidadeAtual}
+                    onChange={(event) => atualizarProduto('quantidadeAtual', event.target.value)}
+                  />
+                </label>
+                <label>
+                  Unidade
+                  <input
+                    required
+                    value={produto.unidadeMedida}
+                    onChange={(event) => atualizarProduto('unidadeMedida', event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="form-row">
+                <label>
+                  Estoque mínimo
+                  <input
+                    min="0"
+                    required
+                    type="number"
+                    value={produto.estoqueMinimo}
+                    onChange={(event) => atualizarProduto('estoqueMinimo', event.target.value)}
+                  />
+                </label>
+                <label>
+                  Preço unitário
+                  <input
+                    min="0"
+                    required
+                    step="0.01"
+                    type="number"
+                    value={produto.precoUnitario}
+                    onChange={(event) => atualizarProduto('precoUnitario', event.target.value)}
+                  />
+                </label>
+              </div>
+              <button className="primary-button" disabled={salvando}>
+                Salvar produto
+              </button>
+            </form>
+          )}
 
-      {aba === 'categoria' && (
-        <form className="form" onSubmit={salvarCategoria}>
-          <label>
-            Nome
-            <input
-              required
-              value={categoria.nome}
-              onChange={(event) => setCategoria({ ...categoria, nome: event.target.value })}
-              placeholder="Ex.: Bebidas"
-            />
-          </label>
-          <label>
-            Descrição
-            <textarea
-              value={categoria.descricao}
-              onChange={(event) =>
-                setCategoria({ ...categoria, descricao: event.target.value })
-              }
-              placeholder="Itens refrigerados, insumos de chapa..."
-            />
-          </label>
-          <button className="primary-button" disabled={salvando}>
-            Salvar categoria
-          </button>
-        </form>
-      )}
+          {aba === 'categoria' && (
+            <form className="form" onSubmit={salvarCategoria}>
+              <label>
+                Nome
+                <input
+                  required
+                  value={categoria.nome}
+                  onChange={(event) => setCategoria({ ...categoria, nome: event.target.value })}
+                  placeholder="Ex.: Bebidas"
+                />
+              </label>
+              <label>
+                Descrição
+                <textarea
+                  value={categoria.descricao}
+                  onChange={(event) =>
+                    setCategoria({ ...categoria, descricao: event.target.value })
+                  }
+                  placeholder="Itens refrigerados, insumos de chapa..."
+                />
+              </label>
+              <button className="primary-button" disabled={salvando}>
+                Salvar categoria
+              </button>
+            </form>
+          )}
 
-      {aba === 'fornecedor' && (
-        <form className="form" onSubmit={salvarFornecedor}>
-          <label>
-            Nome
-            <input
-              required
-              value={fornecedor.nome}
-              onChange={(event) => setFornecedor({ ...fornecedor, nome: event.target.value })}
-              placeholder="Ex.: Distribuidora Central"
-            />
-          </label>
-          <div className="form-row">
-            <label>
-              CNPJ
-              <input
-                value={fornecedor.cnpj}
-                onChange={(event) =>
-                  setFornecedor({ ...fornecedor, cnpj: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              Telefone
-              <input
-                value={fornecedor.telefone}
-                onChange={(event) =>
-                  setFornecedor({ ...fornecedor, telefone: event.target.value })
-                }
-              />
-            </label>
-          </div>
-          <label>
-            Email
-            <input
-              type="email"
-              value={fornecedor.email}
-              onChange={(event) => setFornecedor({ ...fornecedor, email: event.target.value })}
-            />
-          </label>
-          <label>
-            Endereço
-            <input
-              value={fornecedor.endereco}
-              onChange={(event) =>
-                setFornecedor({ ...fornecedor, endereco: event.target.value })
-              }
-            />
-          </label>
-          <button className="primary-button" disabled={salvando}>
-            Salvar fornecedor
-          </button>
-        </form>
-      )}
+          {aba === 'fornecedor' && (
+            <form className="form" onSubmit={salvarFornecedor}>
+              <label>
+                Nome
+                <input
+                  required
+                  value={fornecedor.nome}
+                  onChange={(event) => setFornecedor({ ...fornecedor, nome: event.target.value })}
+                  placeholder="Ex.: Distribuidora Central"
+                />
+              </label>
+              <div className="form-row">
+                <label>
+                  CNPJ
+                  <input
+                    value={fornecedor.cnpj}
+                    onChange={(event) =>
+                      setFornecedor({ ...fornecedor, cnpj: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Telefone
+                  <input
+                    value={fornecedor.telefone}
+                    onChange={(event) =>
+                      setFornecedor({ ...fornecedor, telefone: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={fornecedor.email}
+                  onChange={(event) => setFornecedor({ ...fornecedor, email: event.target.value })}
+                />
+              </label>
+              <label>
+                Endereço
+                <input
+                  value={fornecedor.endereco}
+                  onChange={(event) =>
+                    setFornecedor({ ...fornecedor, endereco: event.target.value })
+                  }
+                />
+              </label>
+              <button className="primary-button" disabled={salvando}>
+                Salvar fornecedor
+              </button>
+            </form>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </>
   );
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="app-shell">
       <header className="topbar">
         <div>
@@ -1141,6 +1329,7 @@ export default function App() {
           }
           highlighted={totalEmAlerta > 0}
           label="Itens em alerta"
+          numericValue={dashboard?.totais?.produtosEmAlerta}
           onClick={() =>
             setFiltrosProduto((atual) => ({
               ...atual,
@@ -1148,20 +1337,43 @@ export default function App() {
             }))
           }
           tone="warning"
-          value={dashboard?.totais?.produtosEmAlerta ?? '-'}
+          value="-"
         />
-        <MetricCard label="Produtos ativos" value={dashboard?.totais?.produtos ?? '-'} />
+        <MetricCard
+          label="Produtos ativos"
+          numericValue={dashboard?.totais?.produtos}
+          value="-"
+        />
         <MetricCard
           label="Unidades no estoque"
+          numericValue={dashboard?.totais?.itensEmEstoque}
           tone="stock"
-          value={numero(dashboard?.totais?.itensEmEstoque)}
+          value="-"
         />
         <MetricCard
+          decimals={2}
           label="Valor estimado"
+          numericValue={dashboard?.totais?.valorEstoque}
+          prefix={'R$\u00a0'}
           tone="money"
-          value={moeda(dashboard?.totais?.valorEstoque)}
+          value="-"
         />
       </section>
+
+      <AnalyticsPanel
+        aberto={painelAnaliticoAberto}
+        buscaAtiva={busca}
+        carregando={carregando}
+        categoriaSelecionada={filtrosProduto.categoria}
+        categorias={categorias}
+        movimentacoes={movimentacoes}
+        onAlternarCategoria={alternarFiltroCategoria}
+        onMudarPeriodo={setPeriodoGraficos}
+        onSelecionarProduto={setBusca}
+        onToggle={alternarPainelAnalitico}
+        periodoDias={periodoGraficos}
+        produtos={produtos}
+      />
 
       <section className={`work-grid ${(!admin || !painelCadastroAberto || isMobile) ? 'single-column' : 'with-aside'}`}>
         <div className="panel panel-wide" id="tabela-produtos">
@@ -1228,17 +1440,6 @@ export default function App() {
                   </option>
                 ))}
               </select>
-              <select
-                aria-label="Filtrar por status"
-                value={filtrosProduto.status}
-                onChange={(event) =>
-                  setFiltrosProduto((atual) => ({ ...atual, status: event.target.value }))
-                }
-              >
-                <option value="">Todos os status</option>
-                <option value="ok">Estoque OK</option>
-                <option value="alerta">Em alerta</option>
-              </select>
               <button className="secondary-button filter-clear" onClick={limparFiltrosProduto} type="button">
                 Limpar
               </button>
@@ -1256,6 +1457,45 @@ export default function App() {
                   suggestionsLabel={produtosEmAlerta.length > 0 ? 'Itens em alerta' : 'Produtos'}
                   value={busca}
                 />
+              </div>
+              <div className="status-chips-bar">
+                <div aria-label="Filtrar por status" className="status-chips-group" role="group">
+                  {[
+                    ['', 'Todos', contagensStatusProdutos.todos],
+                    ['alerta', 'Em alerta', contagensStatusProdutos.alerta],
+                    ['zerado', 'Zerados', contagensStatusProdutos.zerado],
+                    ['ok', 'OK', contagensStatusProdutos.ok]
+                  ].map(([valor, rotulo, total]) => (
+                    <button
+                      aria-pressed={filtrosProduto.status === valor}
+                      className={`quick-chip ${filtrosProduto.status === valor ? 'active' : ''}`}
+                      key={valor || 'todos'}
+                      onClick={() =>
+                        setFiltrosProduto((atual) => ({ ...atual, status: valor }))
+                      }
+                      type="button"
+                    >
+                      <span>{rotulo}</span>
+                      <span className="chip-count">{numero(total)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div aria-label="Densidade da tabela" className="density-switch" role="group">
+                  {[
+                    ['padrao', 'Padrão'],
+                    ['compacto', 'Compacto']
+                  ].map(([valor, rotulo]) => (
+                    <button
+                      aria-pressed={densidadeProdutos === valor}
+                      className={`quick-chip ${densidadeProdutos === valor ? 'active' : ''}`}
+                      key={valor}
+                      onClick={() => alternarDensidadeProdutos(valor)}
+                      type="button"
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="mobile-sort-bar">
                 <select
@@ -1295,31 +1535,107 @@ export default function App() {
           </div>
 
           <div className="table-wrap table-wrap-responsive">
-            <table className="responsive-table products-table">
+            <table
+              className={`responsive-table products-table ${
+                densidadeProdutos === 'compacto' ? 'is-compact' : ''
+              }`}
+            >
               <thead>
                 <tr>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('nome')} type="button">Produto <span>{indicadorOrdenacao('nome')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('categoria')} type="button">Categoria <span>{indicadorOrdenacao('categoria')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('fornecedor')} type="button">Fornecedor <span>{indicadorOrdenacao('fornecedor')}</span></button></th>
-                  <th><button className="sort-button" onClick={() => alternarOrdenacao('quantidadeAtual')} type="button">Qtd. <span>{indicadorOrdenacao('quantidadeAtual')}</span></button></th>
-                  <th><button className="sort-button" onClick={() => alternarOrdenacao('estoqueMinimo')} type="button">Mín. <span>{indicadorOrdenacao('estoqueMinimo')}</span></button></th>
-                  <th><button className="sort-button" onClick={() => alternarOrdenacao('precoUnitario')} type="button">Valor <span>{indicadorOrdenacao('precoUnitario')}</span></button></th>
+                  <th className="col-num"><button className="sort-button sort-button-num" onClick={() => alternarOrdenacao('quantidadeAtual')} type="button">Qtd. <span>{indicadorOrdenacao('quantidadeAtual')}</span></button></th>
+                  <th className="col-num"><button className="sort-button sort-button-num" onClick={() => alternarOrdenacao('estoqueMinimo')} type="button">Mín. <span>{indicadorOrdenacao('estoqueMinimo')}</span></button></th>
+                  <th className="col-num"><button className="sort-button sort-button-num" onClick={() => alternarOrdenacao('precoUnitario')} type="button">Valor <span>{indicadorOrdenacao('precoUnitario')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('status')} type="button">Status <span>{indicadorOrdenacao('status')}</span></button></th>
                   <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {produtosFiltrados.map((item) => (
-                  <tr className={admin ? "clickable-row" : undefined} key={item._id} onClick={admin ? () => abrirEdicaoProduto(item) : undefined}>
+                {produtosPaginados.map((item) => {
+                  const qtd = Math.max(0, Number(item.quantidadeAtual || 0));
+                  const min = Math.max(0, Number(item.estoqueMinimo || 0));
+                  const ref = min > 0 ? min * 2 : Math.max(qtd, 1);
+                  const nivelPercentual =
+                    qtd === 0 ? 0 : Math.min(100, Math.max(8, Math.round((qtd / ref) * 100)));
+                  const classesLinha = [
+                    admin ? 'clickable-row' : '',
+                    item.emAlerta ? 'row-alerta' : '',
+                    qtd === 0 ? 'row-zerado' : ''
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+
+                  const itensMenuProduto = [
+                    {
+                      id: 'movimentar',
+                      label: 'Movimentar estoque',
+                      icon: <ArrowLeftRight size={15} />,
+                      onSelect: () => abrirModalMovimentacao(item)
+                    },
+                    ...(admin
+                      ? [
+                          {
+                            id: 'editar',
+                            label: 'Editar produto',
+                            icon: <Pencil size={15} />,
+                            onSelect: () => abrirEdicaoProduto(item)
+                          }
+                        ]
+                      : []),
+                    ...(item.categoria?._id
+                      ? [
+                          {
+                            id: 'filtrar-categoria',
+                            label: 'Filtrar esta categoria',
+                            icon: <Filter size={15} />,
+                            onSelect: () => alternarFiltroCategoria(item.categoria._id)
+                          }
+                        ]
+                      : []),
+                    ...(admin
+                      ? [
+                          {
+                            id: 'remover',
+                            label: 'Remover produto',
+                            icon: <Trash2 size={15} />,
+                            destructive: true,
+                            onSelect: () => solicitarRemocaoProduto(item)
+                          }
+                        ]
+                      : [])
+                  ];
+
+                  return (
+                  <ContextMenu
+                    as="tr"
+                    className={classesLinha || undefined}
+                    items={itensMenuProduto}
+                    key={item._id}
+                    label={`Opções de ${item.nome}`}
+                    onClick={admin ? () => abrirEdicaoProduto(item) : undefined}
+                    openOnClick={false}
+                  >
                     <td className="cell-primary">
                       <strong>{item.nome}</strong>
                       <span>{item.unidadeMedida}</span>
                     </td>
                     <td className="cell-category" data-label="Categoria">{item.categoria?.nome || '-'}</td>
                     <td className="cell-supplier" data-label="Fornecedor">{item.fornecedor?.nome || '-'}</td>
-                    <td className="cell-qty" data-label="Qtd.">{numero(item.quantidadeAtual)}</td>
-                    <td className="cell-min" data-label="Mín.">{numero(item.estoqueMinimo)}</td>
-                    <td className="cell-price" data-label="Valor">{moeda(item.precoUnitario)}</td>
+                    <td className="cell-qty col-num" data-label="Qtd.">
+                      <div className="qty-cell">
+                        <strong>{numero(item.quantidadeAtual)}</strong>
+                        <div aria-hidden="true" className="stock-meter">
+                          <span
+                            className={`stock-meter-fill ${item.emAlerta ? 'is-alert' : ''}`}
+                            style={{ width: `${nivelPercentual}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="cell-min col-num" data-label="Mín.">{numero(item.estoqueMinimo)}</td>
+                    <td className="cell-price col-num" data-label="Valor">{moeda(item.precoUnitario)}</td>
                     <td className="cell-status" data-label="Status">
                       <span className={`status ${item.emAlerta ? 'danger' : 'ok'}`}>
                         {item.emAlerta ? (
@@ -1327,7 +1643,7 @@ export default function App() {
                         ) : (
                           <CheckCircle2 aria-hidden="true" size={15} />
                         )}
-                        {item.emAlerta ? 'Alerta' : 'OK'}
+                        {qtd === 0 ? 'Zerado' : item.emAlerta ? 'Alerta' : 'OK'}
                       </span>
                     </td>
                     <td className="cell-actions" onClick={(event) => event.stopPropagation()}>
@@ -1369,11 +1685,61 @@ export default function App() {
                         </button>
                       )}
                     </td>
-                  </tr>
-                ))}
+                  </ContextMenu>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          {!carregando && totalProdutosFiltrados > 0 && (
+            <div className="table-footer">
+              <span className="table-footer-count">
+                Mostrando {numero(inicioMostradoProdutos)} a {numero(fimMostradoProdutos)} de{' '}
+                {numero(totalProdutosFiltrados)}
+              </span>
+              <div className="table-footer-controls">
+                <div aria-label="Itens por página" className="page-size-group" role="group">
+                  {OPCOES_PAGINA_PRODUTOS.map((opcao) => (
+                    <button
+                      aria-pressed={itensPorPaginaProdutos === opcao}
+                      className={`quick-chip ${itensPorPaginaProdutos === opcao ? 'active' : ''}`}
+                      key={String(opcao)}
+                      onClick={() => setItensPorPaginaProdutos(opcao)}
+                      type="button"
+                    >
+                      {opcao === 'all' ? 'Todos' : opcao}
+                    </button>
+                  ))}
+                </div>
+                {totalPaginasProdutos > 1 && (
+                  <div aria-label="Paginação" className="pagination-controls" role="group">
+                    <button
+                      className="secondary-button pagination-btn"
+                      disabled={paginaSeguraProdutos <= 1}
+                      onClick={() => setPaginaProdutos((atual) => Math.max(1, atual - 1))}
+                      type="button"
+                    >
+                      Anterior
+                    </button>
+                    <span className="pagination-status">
+                      {paginaSeguraProdutos} / {totalPaginasProdutos}
+                    </span>
+                    <button
+                      className="secondary-button pagination-btn"
+                      disabled={paginaSeguraProdutos >= totalPaginasProdutos}
+                      onClick={() =>
+                        setPaginaProdutos((atual) => Math.min(totalPaginasProdutos, atual + 1))
+                      }
+                      type="button"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {carregando && (
             <div className="loading-state" role="status" aria-live="polite">
@@ -1435,10 +1801,30 @@ export default function App() {
             </thead>
             <tbody>
               {fornecedores.map((item) => (
-                <tr
+                <ContextMenu
+                  as="tr"
                   className="clickable-row"
+                  items={[
+                    {
+                      id: 'detalhes',
+                      label: 'Ver detalhes',
+                      icon: <Eye size={15} />,
+                      onSelect: () => setFornecedorSelecionado(item)
+                    },
+                    {
+                      id: 'filtrar-produtos',
+                      label: 'Filtrar produtos',
+                      icon: <Filter size={15} />,
+                      onSelect: () => {
+                        setFiltrosProduto((atual) => ({ ...atual, fornecedor: item._id }));
+                        rolarParaSecao('tabela-produtos');
+                      }
+                    }
+                  ]}
                   key={item._id}
+                  label={`Opções para ${item.nome}`}
                   onClick={() => setFornecedorSelecionado(item)}
+                  openOnClick={false}
                 >
                   <td className="cell-primary">
                     <button
@@ -1456,7 +1842,7 @@ export default function App() {
                   <td className="cell-phone" data-label="Telefone">{item.telefone || '-'}</td>
                   <td className="cell-email" data-label="Email">{item.email || '-'}</td>
                   <td className="cell-cnpj" data-label="CNPJ">{item.cnpj || '-'}</td>
-                </tr>
+                </ContextMenu>
               ))}
             </tbody>
           </table>
@@ -1575,6 +1961,45 @@ export default function App() {
             </form>
 
             <div className="users-table-column">
+              {usuarios.length > 0 && (
+                <div className="users-filters">
+                  <div aria-label="Filtrar usuários por perfil" className="chip-filter-group" role="group">
+                    {[
+                      ['', 'Todos perfis'],
+                      ['admin', 'Admin'],
+                      ['operador', 'Operador']
+                    ].map(([valor, rotulo]) => (
+                      <button
+                        aria-pressed={filtroPerfilUsuario === valor}
+                        className={`quick-chip ${filtroPerfilUsuario === valor ? 'active' : ''}`}
+                        key={valor || 'todos-perfis'}
+                        onClick={() => setFiltroPerfilUsuario(valor)}
+                        type="button"
+                      >
+                        {rotulo}
+                      </button>
+                    ))}
+                  </div>
+                  <div aria-label="Filtrar usuários por status" className="chip-filter-group" role="group">
+                    {[
+                      ['', 'Todos status'],
+                      ['ativo', 'Ativos'],
+                      ['inativo', 'Inativos']
+                    ].map(([valor, rotulo]) => (
+                      <button
+                        aria-pressed={filtroStatusUsuario === valor}
+                        className={`quick-chip ${filtroStatusUsuario === valor ? 'active' : ''}`}
+                        key={valor || 'todos-status'}
+                        onClick={() => setFiltroStatusUsuario(valor)}
+                        type="button"
+                      >
+                        {rotulo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="table-wrap table-wrap-responsive users-table-wrap">
                 <table className="compact-table responsive-table users-table">
                   <thead>
@@ -1582,12 +2007,38 @@ export default function App() {
                       <th>Usuário</th>
                       <th>Perfil</th>
                       <th>Status</th>
+                      <th className="col-num">Movs.</th>
                       <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {usuarios.map((item) => (
-                      <tr key={item._id}>
+                    {usuariosFiltrados.map((item) => {
+                      const totalMovUsuario =
+                        movimentacoesPorUsuario.get(String(item.nome || '').trim().toLowerCase()) || 0;
+                      return (
+                      <ContextMenu
+                        as="tr"
+                        items={[
+                          {
+                            id: 'editar-usuario',
+                            label: 'Editar usuário',
+                            icon: <Pencil size={15} />,
+                            onSelect: () => editarUsuario(item)
+                          },
+                          {
+                            id: 'ver-movimentacoes',
+                            label: 'Ver movimentações',
+                            icon: <Filter size={15} />,
+                            onSelect: () => {
+                              setBuscaMov(item.nome);
+                              rolarParaSecao('historico-movimentacoes');
+                            }
+                          }
+                        ]}
+                        key={item._id}
+                        label={`Opções de ${item.nome}`}
+                        openOnClick={false}
+                      >
                         <td className="cell-primary">
                           <strong>{item.nome}</strong>
                           <span>{item.email}</span>
@@ -1598,13 +2049,17 @@ export default function App() {
                             {item.ativo ? 'Ativo' : 'Inativo'}
                           </span>
                         </td>
+                        <td className="cell-user-movs col-num" data-label="Movimentações">
+                          {numero(totalMovUsuario)}
+                        </td>
                         <td className="cell-actions">
                           <button className="table-action" onClick={() => editarUsuario(item)} type="button">
                             Editar
                           </button>
                         </td>
-                      </tr>
-                    ))}
+                      </ContextMenu>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1621,12 +2076,21 @@ export default function App() {
                   title="Nenhum usuário cadastrado"
                 />
               )}
+
+              {!carregandoUsuarios && usuarios.length > 0 && usuariosFiltrados.length === 0 && (
+                <EmptyState
+                  actionLabel="Limpar filtros"
+                  onAction={limparFiltrosUsuarios}
+                  text="Altere os filtros de perfil ou status para voltar a listar os usuários."
+                  title="Nenhum usuário corresponde aos filtros"
+                />
+              )}
             </div>
           </div>
         </section>
       )}
 
-      <section className="panel history-panel">
+      <section className="panel history-panel" id="historico-movimentacoes">
         <div className="panel-header">
           <div>
             <h2>Últimas movimentações</h2>
@@ -1650,27 +2114,145 @@ export default function App() {
           </div>
         </div>
 
-        <div className="timeline">
-          {movimentacoesVisiveis.map((item) => (
-            <button
-              key={item._id}
-              className="timeline-item"
-              onClick={() => setMovimentacaoSelecionada(item)}
-              type="button"
-            >
-              <span aria-hidden="true" className={`movement-dot ${item.tipo}`} />
-              <div>
-                <strong>{item.produto?.nome || 'Produto removido'}</strong>
-                <p>
-                  {rotuloTipoMovimentacao(item.tipo)} de {numero(item.quantidade)}{' '}
-                  {Number(item.quantidade) === 1 ? 'unidade' : 'unidades'}
-                </p>
-                <small>
-                  {dataCurta(item.createdAt)} por {item.usuario}
-                </small>
-              </div>
-            </button>
-          ))}
+        <div className="movements-filters">
+          <div aria-label="Filtrar movimentações por tipo" className="chip-filter-group" role="group">
+            {[
+              ['', 'Todas', contagensTipoMov.todas],
+              ['entrada', 'Entrada', contagensTipoMov.entrada],
+              ['saida', 'Saída', contagensTipoMov.saida],
+              ['ajuste', 'Ajuste', contagensTipoMov.ajuste]
+            ].map(([valor, rotulo, total]) => (
+              <button
+                aria-pressed={filtroTipoMov === valor}
+                className={`quick-chip ${filtroTipoMov === valor ? 'active' : ''}`}
+                key={valor || 'todas'}
+                onClick={() => setFiltroTipoMov(valor)}
+                type="button"
+              >
+                <span>{rotulo}</span>
+                <span className="chip-count">{numero(total)}</span>
+              </button>
+            ))}
+          </div>
+          <div className="movements-search-controls">
+            <label className="sr-only" htmlFor="busca-movimentacoes-input">
+              Buscar nas movimentações
+            </label>
+            <input
+              id="busca-movimentacoes-input"
+              onChange={(event) => setBuscaMov(event.target.value)}
+              placeholder="Buscar produto, usuário ou observação..."
+              type="search"
+              value={buscaMov}
+            />
+            {temFiltrosMovAtivos && (
+              <button className="secondary-button" onClick={limparFiltrosMov} type="button">
+                Limpar
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="table-wrap table-wrap-responsive">
+          <table className="responsive-table movements-table">
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Tipo</th>
+                <th className="col-num">Qtd.</th>
+                <th>Responsável</th>
+                <th>Data</th>
+                <th>Observação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {movimentacoesVisiveis.map((item) => {
+                const produtoRelacionado = produtos.find(
+                  (prod) => prod._id === (item.produto?._id || item.produto)
+                );
+                const itensMenuMov = [
+                  {
+                    id: 'detalhes',
+                    label: 'Ver detalhes',
+                    icon: <Eye size={15} />,
+                    onSelect: () => setMovimentacaoSelecionada(item)
+                  },
+                  ...(produtoRelacionado
+                    ? [
+                        {
+                          id: 'movimentar',
+                          label: 'Movimentar produto',
+                          icon: <ArrowLeftRight size={15} />,
+                          onSelect: () => abrirModalMovimentacao(produtoRelacionado)
+                        }
+                      ]
+                    : []),
+                  ...(item.produto?.nome
+                    ? [
+                        {
+                          id: 'filtrar',
+                          label: 'Filtrar este produto',
+                          icon: <Filter size={15} />,
+                          onSelect: () => setBuscaMov(item.produto.nome)
+                        }
+                      ]
+                    : [])
+                ];
+
+                return (
+                <ContextMenu
+                  as="tr"
+                  className="clickable-row"
+                  items={itensMenuMov}
+                  key={item._id}
+                  label={`Opções da movimentação de ${item.produto?.nome || 'produto'}`}
+                  onClick={() => setMovimentacaoSelecionada(item)}
+                  openOnClick={false}
+                >
+                  <td className="cell-primary">
+                    <button
+                      className="row-trigger-button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMovimentacaoSelecionada(item);
+                      }}
+                      type="button"
+                    >
+                      <strong>{item.produto?.nome || 'Produto removido'}</strong>
+                    </button>
+                    <span>
+                      {item.produto?.categoria?.nome || 'Sem categoria'}
+                    </span>
+                  </td>
+                  <td className="cell-type" data-label="Tipo">
+                    <span className={`movement-badge ${item.tipo}`}>
+                      {item.tipo === 'entrada' ? (
+                        <ArrowUp aria-hidden="true" size={14} />
+                      ) : item.tipo === 'saida' ? (
+                        <ArrowDown aria-hidden="true" size={14} />
+                      ) : (
+                        <SlidersHorizontal aria-hidden="true" size={14} />
+                      )}
+                      {rotuloTipoMovimentacao(item.tipo)}
+                    </span>
+                  </td>
+                  <td className="cell-qty col-num" data-label="Qtd.">
+                    {numero(item.quantidade)} {item.produto?.unidadeMedida || 'un'}
+                  </td>
+                  <td className="cell-user" data-label="Responsável">
+                    {item.usuario || '-'}
+                  </td>
+                  <td className="cell-date" data-label="Data">
+                    {dataCurta(item.createdAt)}
+                  </td>
+                  <td className="cell-note" data-label="Observação">
+                    {item.observacao || '-'}
+                  </td>
+                </ContextMenu>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {carregando && (
@@ -1698,6 +2280,15 @@ export default function App() {
           <EmptyState
             title="Sem movimentações"
             text="As entradas, saídas e ajustes vão aparecer aqui."
+          />
+        )}
+
+        {!carregando && movimentacoes.length > 0 && movimentacoesFiltradas.length === 0 && (
+          <EmptyState
+            actionLabel="Limpar filtros"
+            onAction={limparFiltrosMov}
+            title="Nenhuma movimentação encontrada"
+            text="Limpe ou altere o filtro de tipo e busca para ver o histórico."
           />
         )}
       </section>
@@ -1890,6 +2481,34 @@ export default function App() {
               <span>Observação</span>
               <p>{movimentacaoSelecionada.observacao || 'Sem observação registrada.'}</p>
             </div>
+
+            <div className="modal-footer-actions">
+              {(() => {
+                const prodRel = produtos.find(
+                  (p) => p._id === (movimentacaoSelecionada.produto?._id || movimentacaoSelecionada.produto)
+                );
+                return prodRel ? (
+                  <button
+                    className="primary-button"
+                    onClick={() => {
+                      setMovimentacaoSelecionada(null);
+                      abrirModalMovimentacao(prodRel);
+                    }}
+                    type="button"
+                  >
+                    <ArrowLeftRight aria-hidden="true" size={16} />
+                    Movimentar produto
+                  </button>
+                ) : null;
+              })()}
+              <button
+                className="secondary-button"
+                onClick={() => setMovimentacaoSelecionada(null)}
+                type="button"
+              >
+                Fechar
+              </button>
+            </div>
         </ModalDialog>
       )}
 
@@ -1927,7 +2546,7 @@ export default function App() {
                 <span>Telefone</span>
                 <strong>{fornecedorSelecionado.telefone || '-'}</strong>
               </div>
-              <div>
+              <div className="detail-span-full">
                 <span>Email</span>
                 <strong>{fornecedorSelecionado.email || '-'}</strong>
               </div>
@@ -1948,6 +2567,29 @@ export default function App() {
             <div className="detail-note">
               <span>Endereço</span>
               <p>{fornecedorSelecionado.endereco || 'Sem endereço registrado.'}</p>
+            </div>
+
+            <div className="modal-footer-actions">
+              <button
+                className="primary-button"
+                onClick={() => {
+                  const idForn = fornecedorSelecionado._id;
+                  setFornecedorSelecionado(null);
+                  setFiltrosProduto((atual) => ({ ...atual, fornecedor: idForn }));
+                  rolarParaSecao('tabela-produtos');
+                }}
+                type="button"
+              >
+                <Filter aria-hidden="true" size={16} />
+                Filtrar produtos
+              </button>
+              <button
+                className="secondary-button"
+                onClick={() => setFornecedorSelecionado(null)}
+                type="button"
+              >
+                Fechar
+              </button>
             </div>
         </ModalDialog>
       )}
@@ -2368,5 +3010,6 @@ export default function App() {
         />
       </div>
     </main>
+    </MotionConfig>
   );
 }

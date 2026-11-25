@@ -111,7 +111,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(fornecedor)
     }),
-  listarMovimentacoes: () => request('/movimentacoes?limit=50'),
+  listarMovimentacoes: () => request('/movimentacoes?limit=500'),
   criarMovimentacao: (movimentacao) =>
     request('/movimentacoes', {
       method: 'POST',

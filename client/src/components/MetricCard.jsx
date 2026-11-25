@@ -1,8 +1,14 @@
 import React from 'react';
+import { AnimatedCounter } from './arc/animated-counter/animated-counter.tsx';
 
 export function MetricCard({
   label,
   value,
+  numericValue,
+  prefix = '',
+  suffix = '',
+  decimals = 0,
+  change,
   tone = 'neutral',
   helper,
   onClick,
@@ -19,10 +25,27 @@ export function MetricCard({
     .filter(Boolean)
     .join(' ');
 
+  const possuiNumero = typeof numericValue === 'number' && Number.isFinite(numericValue);
+
   const content = (
     <>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <div className="metric-top">
+        <span>{label}</span>
+        {change && <small className="metric-change">{change}</small>}
+      </div>
+      <div className="metric-value">
+        {possuiNumero ? (
+          <AnimatedCounter
+            decimals={decimals}
+            locale="pt-BR"
+            prefix={prefix}
+            suffix={suffix}
+            value={numericValue}
+          />
+        ) : (
+          <strong>{value ?? '-'}</strong>
+        )}
+      </div>
       {helper && <small className="metric-helper">{helper}</small>}
     </>
   );

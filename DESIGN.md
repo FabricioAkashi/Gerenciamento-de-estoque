@@ -9,8 +9,8 @@
 Dial: ENERGY 2 / RHYTHM 2 / MOTION 2
 
 - ENERGY 2 (equilibrado): alto contraste monocromático com títulos serifados editoriais e destaque nítido nos botões de ação principal e no card acionável de itens em alerta.
-- RHYTHM 2 (consistente com quebras intencionais): faixa superior de métricas assimétrica (destaque para o card clicável de alertas), tabela principal de inventário com painel lateral de cadastro retrátil, listas complementares, painel de histórico de movimentações em largura total e registro operacional rápido em modal dedicado.
-- MOTION 2 (funcional e estrutural): transições suaves na abertura/fechamento do painel lateral de cadastro (`0.55s`), na troca de tema, no feedback discreto de foco/clique e nos micro-controles estruturais do painel (menu de ações da tabela de produtos, busca expansível na barra de filtros da tabela, toast flutuante e confirmação por pressão contínua na remoção de itens), respeitando `prefers-reduced-motion: reduce` e sem animações decorativas ou loops.
+- RHYTHM 2 (consistente com quebras intencionais): faixa superior de métricas assimétrica (destaque para o card clicável de alertas com contadores numéricos fluidos), bloco analítico recolhível (`2x2` no desktop) com curva diária, calendário de atividade e distribuições clicáveis, tabela principal de inventário com painel lateral de cadastro retrátil (ou modal no mobile), tabelas complementares com filtros rápidos e registro operacional em modal dedicado.
+- MOTION 2 (funcional e estrutural): transições suaves na abertura/fechamento do painel lateral de cadastro (`0.55s`), na troca de tema, na atualização dos contadores e curvas analíticas e nos micro-controles estruturais do painel (menu de ações da tabela de produtos, busca expansível na barra de filtros da tabela, toast flutuante e confirmação por pressão contínua na remoção de itens), respeitando `prefers-reduced-motion: reduce` e sem animações decorativas ou loops.
 
 ## Paleta
 ### Tema Claro (Padrão)
