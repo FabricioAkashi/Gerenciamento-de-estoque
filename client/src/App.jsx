@@ -6,6 +6,7 @@ import {
   Boxes,
   CheckCircle2,
   LogOut,
+  Minus,
   Moon,
   PanelRightClose,
   Pencil,
@@ -54,6 +55,11 @@ const movimentacaoInicial = {
   quantidade: 1,
   usuario: 'Operador',
   observacao: ''
+};
+const MOTIVOS_MOVIMENTACAO = {
+  entrada: ['Compra / reposição', 'Devolução', 'Bonificação'],
+  saida: ['Consumo do turno', 'Venda / balcão', 'Perda / vencimento'],
+  ajuste: ['Contagem manual', 'Correção de lançamento', 'Quebra de inventário']
 };
 const loginInicial = { nome: '', email: '', senha: '' };
 const usuarioInicial = {
@@ -136,8 +142,13 @@ export default function App() {
   const [usuarioEditando, setUsuarioEditando] = useState(null);
   const [produtoParaRemover, setProdutoParaRemover] = useState(null);
   const [remocaoConfirmada, setRemocaoConfirmada] = useState(false);
+  const [modalMovimentacaoAberto, setModalMovimentacaoAberto] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches
+  );
   const [toast, setToast] = useState({ open: false, tone: 'success', title: '', description: '' });
   const quantidadeMovRef = useRef(null);
+  const nomeUsuarioRef = useRef(null);
 
   const admin = usuarioLogado?.papel === 'admin';
 
@@ -251,6 +262,8 @@ export default function App() {
     setUsuarios([]);
     setProdutoParaRemover(null);
     setRemocaoConfirmada(false);
+    setModalMovimentacaoAberto(false);
+    setPainelCadastroAberto(false);
     setToast({ open: false, tone: 'success', title: '', description: '' });
     setMensagem('');
     setErro('');
@@ -295,6 +308,14 @@ export default function App() {
       ativo: item.ativo,
       senhaConfirmacao: ''
     });
+    const formulario = document.getElementById('form-usuario');
+    const reduzir =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    formulario?.scrollIntoView({ behavior: reduzir ? 'auto' : 'smooth', block: 'center' });
+    window.setTimeout(() => {
+      nomeUsuarioRef.current?.focus();
+    }, 150);
   }
 
   function cancelarEdicaoUsuario() {
@@ -338,6 +359,18 @@ export default function App() {
       carregarUsuarios().catch((error) => setErro(error.message));
     }
   }, [admin]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 700px)');
+    const atualizarViewport = (event) => setIsMobile(event.matches);
+    setIsMobile(mediaQuery.matches);
+    mediaQuery.addEventListener('change', atualizarViewport);
+    return () => mediaQuery.removeEventListener('change', atualizarViewport);
+  }, []);
 
   const temFiltrosProdutoAtivos = Boolean(
     busca.trim() || filtrosProduto.categoria || filtrosProduto.fornecedor || filtrosProduto.status
@@ -467,9 +500,11 @@ export default function App() {
       setMensagem(sucesso);
       mostrarToast('success', sucesso);
       await carregarDados();
+      return true;
     } catch (error) {
       setErro(error.message);
       mostrarToast('error', 'Não foi possível concluir', error.message);
+      return false;
     } finally {
       setSalvando(false);
     }
@@ -481,7 +516,7 @@ export default function App() {
 
   async function salvarProduto(event) {
     event.preventDefault();
-    await executarAcao(
+    const ok = await executarAcao(
       () =>
         api.criarProduto({
           ...produto,
@@ -491,35 +526,100 @@ export default function App() {
         }),
       'Produto cadastrado com sucesso.'
     );
-    setProduto(produtoInicial);
+    if (ok) {
+      setProduto(produtoInicial);
+      if (isMobile) {
+        setPainelCadastroAberto(false);
+      }
+    }
   }
 
   async function salvarCategoria(event) {
     event.preventDefault();
-    await executarAcao(() => api.criarCategoria(categoria), 'Categoria cadastrada com sucesso.');
-    setCategoria(categoriaInicial);
+    const ok = await executarAcao(() => api.criarCategoria(categoria), 'Categoria cadastrada com sucesso.');
+    if (ok) {
+      setCategoria(categoriaInicial);
+      if (isMobile) {
+        setPainelCadastroAberto(false);
+      }
+    }
   }
 
   async function salvarFornecedor(event) {
     event.preventDefault();
-    await executarAcao(
+    const ok = await executarAcao(
       () => api.criarFornecedor(fornecedor),
       'Fornecedor cadastrado com sucesso.'
     );
-    setFornecedor(fornecedorInicial);
+    if (ok) {
+      setFornecedor(fornecedorInicial);
+      if (isMobile) {
+        setPainelCadastroAberto(false);
+      }
+    }
   }
+
+  const produtoMovSelecionado = useMemo(
+    () => produtos.find((item) => item._id === movimentacao.produto) || null,
+    [produtos, movimentacao.produto]
+  );
+
+  const qtdMovNumero = Number(movimentacao.quantidade);
+  const qtdMovValida = Number.isFinite(qtdMovNumero) && qtdMovNumero > 0;
+  const saldoAtualMov = Number(produtoMovSelecionado?.quantidadeAtual ?? 0);
+  const novoSaldoMov = useMemo(() => {
+    if (!produtoMovSelecionado) return 0;
+    if (!qtdMovValida) return saldoAtualMov;
+    if (movimentacao.tipo === 'entrada') return saldoAtualMov + qtdMovNumero;
+    if (movimentacao.tipo === 'saida') return saldoAtualMov - qtdMovNumero;
+    return qtdMovNumero;
+  }, [produtoMovSelecionado, qtdMovValida, qtdMovNumero, saldoAtualMov, movimentacao.tipo]);
+
+  const saldoInsuficienteMov = Boolean(
+    produtoMovSelecionado &&
+      movimentacao.tipo === 'saida' &&
+      qtdMovValida &&
+      qtdMovNumero > saldoAtualMov
+  );
+
+  const ficaraEmAlertaMov = Boolean(
+    produtoMovSelecionado &&
+      qtdMovValida &&
+      !saldoInsuficienteMov &&
+      novoSaldoMov <= Number(produtoMovSelecionado.estoqueMinimo ?? 0)
+  );
 
   async function salvarMovimentacao(event) {
     event.preventDefault();
-    await executarAcao(
-      () =>
-        api.criarMovimentacao({
-          ...movimentacao,
-          quantidade: Number(movimentacao.quantidade)
-        }),
-      'Movimentação registrada com sucesso.'
-    );
-    setMovimentacao(movimentacaoInicial);
+
+    if (!produtoMovSelecionado || !qtdMovValida || saldoInsuficienteMov || salvando) {
+      return;
+    }
+
+    setSalvando(true);
+    setErro('');
+    setMensagem('');
+
+    try {
+      await api.criarMovimentacao({
+        ...movimentacao,
+        quantidade: qtdMovNumero
+      });
+      setModalMovimentacaoAberto(false);
+      setMovimentacao(movimentacaoInicial);
+      await carregarDados();
+      setMensagem('Movimentação registrada com sucesso.');
+      mostrarToast(
+        'success',
+        'Movimentação registrada',
+        `${rotuloTipoMovimentacao(movimentacao.tipo)} de ${numero(qtdMovNumero)} ${produtoMovSelecionado.unidadeMedida} em ${produtoMovSelecionado.nome}.`
+      );
+    } catch (error) {
+      setErro(error.message);
+      mostrarToast('error', 'Não foi possível registrar', error.message);
+    } finally {
+      setSalvando(false);
+    }
   }
 
   function solicitarRemocaoProduto(item) {
@@ -563,16 +663,41 @@ export default function App() {
     }
   }
 
-  function prepararMovimentacaoProduto(item) {
-    setMovimentacao((atual) => ({ ...atual, produto: item._id }));
-    const painel = document.getElementById('movimentar-estoque');
-    const reduzir =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    painel?.scrollIntoView({ behavior: reduzir ? 'auto' : 'smooth', block: 'center' });
-    window.setTimeout(() => {
-      quantidadeMovRef.current?.focus();
-    }, 200);
+  function abrirModalMovimentacao(item = null) {
+    setMovimentacao({
+      ...movimentacaoInicial,
+      produto: item?._id || '',
+      tipo: 'entrada',
+      quantidade: 1,
+      observacao: ''
+    });
+    setModalMovimentacaoAberto(true);
+    if (item) {
+      window.setTimeout(() => {
+        quantidadeMovRef.current?.focus();
+      }, 120);
+    }
+  }
+
+  function fecharModalMovimentacao() {
+    if (salvando) {
+      return;
+    }
+
+    setModalMovimentacaoAberto(false);
+    setMovimentacao(movimentacaoInicial);
+  }
+
+  function selecionarTipoMovimentacao(novoTipo) {
+    setMovimentacao((atual) => {
+      const motivosAnteriores = MOTIVOS_MOVIMENTACAO[atual.tipo] || [];
+      const observacaoEraPredefinida = motivosAnteriores.includes(atual.observacao);
+      return {
+        ...atual,
+        tipo: novoTipo,
+        observacao: observacaoEraPredefinida ? '' : atual.observacao
+      };
+    });
   }
 
   function abrirEdicaoProduto(item) {
@@ -729,6 +854,232 @@ export default function App() {
     );
   }
 
+  const conteudoCadastro = (
+    <>
+      <div className={isMobile ? 'modal-header' : 'panel-header'}>
+        <div>
+          <h2 id={isMobile ? 'cadastro-modal-titulo' : undefined}>Novo cadastro</h2>
+        </div>
+        <button
+          aria-label="Fechar painel de cadastro"
+          className={isMobile ? 'icon-button modal-close' : 'icon-button'}
+          disabled={salvando}
+          onClick={() => setPainelCadastroAberto(false)}
+          title="Fechar painel de cadastro"
+          type="button"
+        >
+          <X aria-hidden="true" size={18} />
+        </button>
+      </div>
+
+      <div aria-label="Tipo de cadastro" className="tabs" role="tablist">
+        <button
+          aria-selected={aba === 'produto'}
+          className={aba === 'produto' ? 'active' : ''}
+          onClick={() => setAba('produto')}
+          role="tab"
+          type="button"
+        >
+          <Boxes aria-hidden="true" size={15} />
+          Produto
+        </button>
+        <button
+          aria-selected={aba === 'categoria'}
+          className={aba === 'categoria' ? 'active' : ''}
+          onClick={() => setAba('categoria')}
+          role="tab"
+          type="button"
+        >
+          <SlidersHorizontal aria-hidden="true" size={15} />
+          Categoria
+        </button>
+        <button
+          aria-selected={aba === 'fornecedor'}
+          className={aba === 'fornecedor' ? 'active' : ''}
+          onClick={() => setAba('fornecedor')}
+          role="tab"
+          type="button"
+        >
+          <Truck aria-hidden="true" size={15} />
+          Fornecedor
+        </button>
+      </div>
+
+      {aba === 'produto' && (
+        <form className="form" onSubmit={salvarProduto}>
+          <label>
+            Nome
+            <input
+              required
+              value={produto.nome}
+              onChange={(event) => atualizarProduto('nome', event.target.value)}
+              placeholder="Ex.: Hambúrguer bovino"
+            />
+          </label>
+          <div className="form-row">
+            <label>
+              Categoria
+              <select
+                required
+                value={produto.categoria}
+                onChange={(event) => atualizarProduto('categoria', event.target.value)}
+              >
+                <option value="">Selecione</option>
+                {categorias.map((item) => (
+                  <option key={item._id} value={item._id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Fornecedor
+              <select
+                required
+                value={produto.fornecedor}
+                onChange={(event) => atualizarProduto('fornecedor', event.target.value)}
+              >
+                <option value="">Selecione</option>
+                {fornecedores.map((item) => (
+                  <option key={item._id} value={item._id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Quantidade
+              <input
+                min="0"
+                required
+                type="number"
+                value={produto.quantidadeAtual}
+                onChange={(event) => atualizarProduto('quantidadeAtual', event.target.value)}
+              />
+            </label>
+            <label>
+              Unidade
+              <input
+                required
+                value={produto.unidadeMedida}
+                onChange={(event) => atualizarProduto('unidadeMedida', event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Estoque mínimo
+              <input
+                min="0"
+                required
+                type="number"
+                value={produto.estoqueMinimo}
+                onChange={(event) => atualizarProduto('estoqueMinimo', event.target.value)}
+              />
+            </label>
+            <label>
+              Preço unitário
+              <input
+                min="0"
+                required
+                step="0.01"
+                type="number"
+                value={produto.precoUnitario}
+                onChange={(event) => atualizarProduto('precoUnitario', event.target.value)}
+              />
+            </label>
+          </div>
+          <button className="primary-button" disabled={salvando}>
+            Salvar produto
+          </button>
+        </form>
+      )}
+
+      {aba === 'categoria' && (
+        <form className="form" onSubmit={salvarCategoria}>
+          <label>
+            Nome
+            <input
+              required
+              value={categoria.nome}
+              onChange={(event) => setCategoria({ ...categoria, nome: event.target.value })}
+              placeholder="Ex.: Bebidas"
+            />
+          </label>
+          <label>
+            Descrição
+            <textarea
+              value={categoria.descricao}
+              onChange={(event) =>
+                setCategoria({ ...categoria, descricao: event.target.value })
+              }
+              placeholder="Itens refrigerados, insumos de chapa..."
+            />
+          </label>
+          <button className="primary-button" disabled={salvando}>
+            Salvar categoria
+          </button>
+        </form>
+      )}
+
+      {aba === 'fornecedor' && (
+        <form className="form" onSubmit={salvarFornecedor}>
+          <label>
+            Nome
+            <input
+              required
+              value={fornecedor.nome}
+              onChange={(event) => setFornecedor({ ...fornecedor, nome: event.target.value })}
+              placeholder="Ex.: Distribuidora Central"
+            />
+          </label>
+          <div className="form-row">
+            <label>
+              CNPJ
+              <input
+                value={fornecedor.cnpj}
+                onChange={(event) =>
+                  setFornecedor({ ...fornecedor, cnpj: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Telefone
+              <input
+                value={fornecedor.telefone}
+                onChange={(event) =>
+                  setFornecedor({ ...fornecedor, telefone: event.target.value })
+                }
+              />
+            </label>
+          </div>
+          <label>
+            Email
+            <input
+              type="email"
+              value={fornecedor.email}
+              onChange={(event) => setFornecedor({ ...fornecedor, email: event.target.value })}
+            />
+          </label>
+          <label>
+            Endereço
+            <input
+              value={fornecedor.endereco}
+              onChange={(event) =>
+                setFornecedor({ ...fornecedor, endereco: event.target.value })
+              }
+            />
+          </label>
+          <button className="primary-button" disabled={salvando}>
+            Salvar fornecedor
+          </button>
+        </form>
+      )}
+    </>
+  );
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -812,30 +1163,41 @@ export default function App() {
         />
       </section>
 
-      <section className={`work-grid ${(!admin || !painelCadastroAberto) ? 'single-column' : 'with-aside'}`}>
+      <section className={`work-grid ${(!admin || !painelCadastroAberto || isMobile) ? 'single-column' : 'with-aside'}`}>
         <div className="panel panel-wide" id="tabela-produtos">
           <div className="panel-header inventory-header">
             <div className="inventory-title-bar">
               <div>
                 <h2>Produtos</h2>
               </div>
-              {admin && (
+              <div className="inventory-title-actions">
                 <button
-                  aria-controls="painel-cadastro"
-                  aria-expanded={painelCadastroAberto}
-                  className={`toggle-cadastrar-btn ${painelCadastroAberto ? 'active' : ''}`}
-                  onClick={() => setPainelCadastroAberto((atual) => !atual)}
-                  title={painelCadastroAberto ? 'Ocultar formulário de cadastro' : 'Abrir formulário de cadastro'}
+                  className={admin ? 'secondary-button' : 'primary-button'}
+                  onClick={() => abrirModalMovimentacao()}
                   type="button"
                 >
-                  {painelCadastroAberto ? (
-                    <PanelRightClose aria-hidden="true" size={16} />
-                  ) : (
-                    <Plus aria-hidden="true" size={16} />
-                  )}
-                  <span>{painelCadastroAberto ? 'Ocultar cadastro' : 'Novo cadastro'}</span>
+                  <ArrowLeftRight aria-hidden="true" size={16} />
+                  <span>Movimentar</span>
                 </button>
-              )}
+                {admin && (
+                  <button
+                    aria-controls={!isMobile ? 'painel-cadastro' : undefined}
+                    aria-expanded={painelCadastroAberto}
+                    aria-haspopup={isMobile ? 'dialog' : undefined}
+                    className={`toggle-cadastrar-btn ${!isMobile && painelCadastroAberto ? 'active' : ''}`}
+                    onClick={() => setPainelCadastroAberto((atual) => !atual)}
+                    title={!isMobile && painelCadastroAberto ? 'Ocultar formulário de cadastro' : 'Abrir formulário de cadastro'}
+                    type="button"
+                  >
+                    {!isMobile && painelCadastroAberto ? (
+                      <PanelRightClose aria-hidden="true" size={16} />
+                    ) : (
+                      <Plus aria-hidden="true" size={16} />
+                    )}
+                    <span>{!isMobile && painelCadastroAberto ? 'Ocultar cadastro' : 'Novo cadastro'}</span>
+                  </button>
+                )}
+              </div>
             </div>
             <div className="product-filters">
               <select
@@ -895,11 +1257,45 @@ export default function App() {
                   value={busca}
                 />
               </div>
+              <div className="mobile-sort-bar">
+                <select
+                  aria-label="Ordenar produtos por"
+                  value={ordenacaoProdutos.campo}
+                  onChange={(event) =>
+                    setOrdenacaoProdutos((atual) => ({ ...atual, campo: event.target.value }))
+                  }
+                >
+                  <option value="nome">Ordenar: Nome</option>
+                  <option value="categoria">Ordenar: Categoria</option>
+                  <option value="fornecedor">Ordenar: Fornecedor</option>
+                  <option value="quantidadeAtual">Ordenar: Quantidade</option>
+                  <option value="estoqueMinimo">Ordenar: Estoque mínimo</option>
+                  <option value="precoUnitario">Ordenar: Valor</option>
+                  <option value="status">Ordenar: Status</option>
+                </select>
+                <button
+                  aria-label={
+                    ordenacaoProdutos.direcao === 'asc'
+                      ? 'Ordem crescente, clique para inverter'
+                      : 'Ordem decrescente, clique para inverter'
+                  }
+                  className="secondary-button mobile-sort-dir"
+                  onClick={() =>
+                    setOrdenacaoProdutos((atual) => ({
+                      ...atual,
+                      direcao: atual.direcao === 'asc' ? 'desc' : 'asc'
+                    }))
+                  }
+                  type="button"
+                >
+                  {ordenacaoProdutos.direcao === 'asc' ? 'A-Z' : 'Z-A'}
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="table-wrap">
-            <table>
+          <div className="table-wrap table-wrap-responsive">
+            <table className="responsive-table products-table">
               <thead>
                 <tr>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('nome')} type="button">Produto <span>{indicadorOrdenacao('nome')}</span></button></th>
@@ -909,22 +1305,22 @@ export default function App() {
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('estoqueMinimo')} type="button">Mín. <span>{indicadorOrdenacao('estoqueMinimo')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('precoUnitario')} type="button">Valor <span>{indicadorOrdenacao('precoUnitario')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('status')} type="button">Status <span>{indicadorOrdenacao('status')}</span></button></th>
-                  {admin && <th>Ações</th>}
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {produtosFiltrados.map((item) => (
                   <tr className={admin ? "clickable-row" : undefined} key={item._id} onClick={admin ? () => abrirEdicaoProduto(item) : undefined}>
-                    <td>
+                    <td className="cell-primary">
                       <strong>{item.nome}</strong>
                       <span>{item.unidadeMedida}</span>
                     </td>
-                    <td>{item.categoria?.nome || '-'}</td>
-                    <td>{item.fornecedor?.nome || '-'}</td>
-                    <td>{numero(item.quantidadeAtual)}</td>
-                    <td>{numero(item.estoqueMinimo)}</td>
-                    <td>{moeda(item.precoUnitario)}</td>
-                    <td>
+                    <td className="cell-category" data-label="Categoria">{item.categoria?.nome || '-'}</td>
+                    <td className="cell-supplier" data-label="Fornecedor">{item.fornecedor?.nome || '-'}</td>
+                    <td className="cell-qty" data-label="Qtd.">{numero(item.quantidadeAtual)}</td>
+                    <td className="cell-min" data-label="Mín.">{numero(item.estoqueMinimo)}</td>
+                    <td className="cell-price" data-label="Valor">{moeda(item.precoUnitario)}</td>
+                    <td className="cell-status" data-label="Status">
                       <span className={`status ${item.emAlerta ? 'danger' : 'ok'}`}>
                         {item.emAlerta ? (
                           <AlertTriangle aria-hidden="true" size={15} />
@@ -934,8 +1330,8 @@ export default function App() {
                         {item.emAlerta ? 'Alerta' : 'OK'}
                       </span>
                     </td>
-                    {admin && (
-                      <td onClick={(event) => event.stopPropagation()}>
+                    <td className="cell-actions" onClick={(event) => event.stopPropagation()}>
+                      {admin ? (
                         <div onClick={(event) => event.stopPropagation()}>
                           <DropdownMenu
                             ariaLabel={`Ações para ${item.nome}`}
@@ -948,7 +1344,7 @@ export default function App() {
                               {
                                 label: 'Movimentar estoque',
                                 icon: <ArrowLeftRight size={15} />,
-                                onSelect: () => prepararMovimentacaoProduto(item)
+                                onSelect: () => abrirModalMovimentacao(item)
                               },
                               {
                                 label: 'Remover produto',
@@ -961,8 +1357,18 @@ export default function App() {
                             label="Ações"
                           />
                         </div>
-                      </td>
-                    )}
+                      ) : (
+                        <button
+                          aria-label={`Movimentar estoque de ${item.nome}`}
+                          className="table-action"
+                          onClick={() => abrirModalMovimentacao(item)}
+                          type="button"
+                        >
+                          <ArrowLeftRight aria-hidden="true" size={15} />
+                          Movimentar
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -996,7 +1402,7 @@ export default function App() {
           )}
         </div>
 
-        {admin && (
+        {admin && !isMobile && (
         <aside
           aria-hidden={!painelCadastroAberto}
           className={`panel aside-form-panel ${painelCadastroAberto ? 'open' : 'closed'}`}
@@ -1004,226 +1410,7 @@ export default function App() {
           inert={!painelCadastroAberto ? true : undefined}
         >
           <div className="aside-form-inner">
-            <div className="panel-header">
-            <div>
-              <h2>Novo cadastro</h2>
-            </div>
-            <button
-              aria-label="Fechar painel de cadastro"
-              className="icon-button"
-              onClick={() => setPainelCadastroAberto(false)}
-              title="Fechar painel de cadastro"
-              type="button"
-            >
-              <X aria-hidden="true" size={18} />
-            </button>
-          </div>
-
-          <div aria-label="Tipo de cadastro" className="tabs" role="tablist">
-            <button
-              aria-selected={aba === 'produto'}
-              className={aba === 'produto' ? 'active' : ''}
-              onClick={() => setAba('produto')}
-              role="tab"
-              type="button"
-            >
-              <Boxes aria-hidden="true" size={15} />
-              Produto
-            </button>
-            <button
-              aria-selected={aba === 'categoria'}
-              className={aba === 'categoria' ? 'active' : ''}
-              onClick={() => setAba('categoria')}
-              role="tab"
-              type="button"
-            >
-              <SlidersHorizontal aria-hidden="true" size={15} />
-              Categoria
-            </button>
-            <button
-              aria-selected={aba === 'fornecedor'}
-              className={aba === 'fornecedor' ? 'active' : ''}
-              onClick={() => setAba('fornecedor')}
-              role="tab"
-              type="button"
-            >
-              <Truck aria-hidden="true" size={15} />
-              Fornecedor
-            </button>
-          </div>
-
-          {aba === 'produto' && (
-            <form className="form" onSubmit={salvarProduto}>
-              <label>
-                Nome
-                <input
-                  required
-                  value={produto.nome}
-                  onChange={(event) => atualizarProduto('nome', event.target.value)}
-                  placeholder="Ex.: Hambúrguer bovino"
-                />
-              </label>
-              <div className="form-row">
-                <label>
-                  Categoria
-                  <select
-                    required
-                    value={produto.categoria}
-                    onChange={(event) => atualizarProduto('categoria', event.target.value)}
-                  >
-                    <option value="">Selecione</option>
-                    {categorias.map((item) => (
-                      <option key={item._id} value={item._id}>
-                        {item.nome}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Fornecedor
-                  <select
-                    required
-                    value={produto.fornecedor}
-                    onChange={(event) => atualizarProduto('fornecedor', event.target.value)}
-                  >
-                    <option value="">Selecione</option>
-                    {fornecedores.map((item) => (
-                      <option key={item._id} value={item._id}>
-                        {item.nome}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="form-row">
-                <label>
-                  Quantidade
-                  <input
-                    min="0"
-                    required
-                    type="number"
-                    value={produto.quantidadeAtual}
-                    onChange={(event) => atualizarProduto('quantidadeAtual', event.target.value)}
-                  />
-                </label>
-                <label>
-                  Unidade
-                  <input
-                    required
-                    value={produto.unidadeMedida}
-                    onChange={(event) => atualizarProduto('unidadeMedida', event.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="form-row">
-                <label>
-                  Estoque mínimo
-                  <input
-                    min="0"
-                    required
-                    type="number"
-                    value={produto.estoqueMinimo}
-                    onChange={(event) => atualizarProduto('estoqueMinimo', event.target.value)}
-                  />
-                </label>
-                <label>
-                  Preço unitário
-                  <input
-                    min="0"
-                    required
-                    step="0.01"
-                    type="number"
-                    value={produto.precoUnitario}
-                    onChange={(event) => atualizarProduto('precoUnitario', event.target.value)}
-                  />
-                </label>
-              </div>
-              <button className="primary-button" disabled={salvando}>
-                Salvar produto
-              </button>
-            </form>
-          )}
-
-          {aba === 'categoria' && (
-            <form className="form" onSubmit={salvarCategoria}>
-              <label>
-                Nome
-                <input
-                  required
-                  value={categoria.nome}
-                  onChange={(event) => setCategoria({ ...categoria, nome: event.target.value })}
-                  placeholder="Ex.: Bebidas"
-                />
-              </label>
-              <label>
-                Descrição
-                <textarea
-                  value={categoria.descricao}
-                  onChange={(event) =>
-                    setCategoria({ ...categoria, descricao: event.target.value })
-                  }
-                  placeholder="Itens refrigerados, insumos de chapa..."
-                />
-              </label>
-              <button className="primary-button" disabled={salvando}>
-                Salvar categoria
-              </button>
-            </form>
-          )}
-
-          {aba === 'fornecedor' && (
-            <form className="form" onSubmit={salvarFornecedor}>
-              <label>
-                Nome
-                <input
-                  required
-                  value={fornecedor.nome}
-                  onChange={(event) => setFornecedor({ ...fornecedor, nome: event.target.value })}
-                  placeholder="Ex.: Distribuidora Central"
-                />
-              </label>
-              <div className="form-row">
-                <label>
-                  CNPJ
-                  <input
-                    value={fornecedor.cnpj}
-                    onChange={(event) =>
-                      setFornecedor({ ...fornecedor, cnpj: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Telefone
-                  <input
-                    value={fornecedor.telefone}
-                    onChange={(event) =>
-                      setFornecedor({ ...fornecedor, telefone: event.target.value })
-                    }
-                  />
-                </label>
-              </div>
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={fornecedor.email}
-                  onChange={(event) => setFornecedor({ ...fornecedor, email: event.target.value })}
-                />
-              </label>
-              <label>
-                Endereço
-                <input
-                  value={fornecedor.endereco}
-                  onChange={(event) =>
-                    setFornecedor({ ...fornecedor, endereco: event.target.value })
-                  }
-                />
-              </label>
-              <button className="primary-button" disabled={salvando}>
-                Salvar fornecedor
-              </button>
-            </form>
-          )}
+            {conteudoCadastro}
           </div>
         </aside>
         )}
@@ -1236,8 +1423,8 @@ export default function App() {
           </div>
         </div>
 
-        <div className="table-wrap">
-          <table className="compact-table">
+        <div className="table-wrap table-wrap-responsive">
+          <table className="compact-table responsive-table suppliers-table">
             <thead>
               <tr>
                 <th>Fornecedor</th>
@@ -1253,7 +1440,7 @@ export default function App() {
                   key={item._id}
                   onClick={() => setFornecedorSelecionado(item)}
                 >
-                  <td>
+                  <td className="cell-primary">
                     <button
                       className="row-trigger-button"
                       onClick={(event) => {
@@ -1266,9 +1453,9 @@ export default function App() {
                     </button>
                     <span>{item.endereco || 'Sem endereço'}</span>
                   </td>
-                  <td>{item.telefone || '-'}</td>
-                  <td>{item.email || '-'}</td>
-                  <td>{item.cnpj || '-'}</td>
+                  <td className="cell-phone" data-label="Telefone">{item.telefone || '-'}</td>
+                  <td className="cell-email" data-label="Email">{item.email || '-'}</td>
+                  <td className="cell-cnpj" data-label="CNPJ">{item.cnpj || '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1298,11 +1485,19 @@ export default function App() {
           </div>
 
           <div className="users-grid">
-            <form className="form" onSubmit={salvarUsuario}>
+            <form className="form" id="form-usuario" onSubmit={salvarUsuario}>
+              {usuarioEditando && (
+                <div aria-live="polite" className="editing-banner" role="status">
+                  <span>
+                    Editando usuário: <strong>{usuarioEditando.nome}</strong> ({usuarioEditando.email})
+                  </span>
+                </div>
+              )}
               <div className="form-row">
                 <label>
                   Nome
                   <input
+                    ref={nomeUsuarioRef}
                     required
                     value={usuarioForm.nome}
                     onChange={(event) => setUsuarioForm({ ...usuarioForm, nome: event.target.value })}
@@ -1379,9 +1574,9 @@ export default function App() {
               </div>
             </form>
 
-            <div>
-              <div className="table-wrap users-table-wrap">
-                <table className="compact-table">
+            <div className="users-table-column">
+              <div className="table-wrap table-wrap-responsive users-table-wrap">
+                <table className="compact-table responsive-table users-table">
                   <thead>
                     <tr>
                       <th>Usuário</th>
@@ -1393,17 +1588,17 @@ export default function App() {
                   <tbody>
                     {usuarios.map((item) => (
                       <tr key={item._id}>
-                        <td>
+                        <td className="cell-primary">
                           <strong>{item.nome}</strong>
                           <span>{item.email}</span>
                         </td>
-                        <td>{item.papel === 'admin' ? 'Admin' : 'Operador'}</td>
-                        <td>
+                        <td className="cell-role" data-label="Perfil">{item.papel === 'admin' ? 'Admin' : 'Operador'}</td>
+                        <td className="cell-status" data-label="Status">
                           <span className={`status ${item.ativo ? 'ok' : 'danger'}`}>
                             {item.ativo ? 'Ativo' : 'Inativo'}
                           </span>
                         </td>
-                        <td>
+                        <td className="cell-actions">
                           <button className="table-action" onClick={() => editarUsuario(item)} type="button">
                             Editar
                           </button>
@@ -1431,151 +1626,80 @@ export default function App() {
         </section>
       )}
 
-      <section className="bottom-grid">
-        <div className="panel" id="movimentar-estoque">
-          <div className="panel-header">
-            <div>
-              <h2>Movimentar estoque</h2>
-            </div>
+      <section className="panel history-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Últimas movimentações</h2>
           </div>
-
-          <form className="form" onSubmit={salvarMovimentacao}>
-            <label>
-              Produto
-              <select
-                required
-                value={movimentacao.produto}
-                onChange={(event) =>
-                  setMovimentacao({ ...movimentacao, produto: event.target.value })
-                }
-              >
-                <option value="">Selecione</option>
-                {produtos.map((item) => (
-                  <option key={item._id} value={item._id}>
-                    {item.nome} - {numero(item.quantidadeAtual)} {item.unidadeMedida}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div aria-label="Tipo de movimentação" className="movement-options" role="group">
-              {[
-                ['entrada', ArrowUp, 'Entrada'],
-                ['saida', ArrowDown, 'Saída'],
-                ['ajuste', SlidersHorizontal, 'Ajuste']
-              ].map(([tipo, Icone, label]) => (
-                <button
-                  aria-pressed={movimentacao.tipo === tipo}
-                  className={movimentacao.tipo === tipo ? 'active' : ''}
-                  key={tipo}
-                  onClick={() => setMovimentacao({ ...movimentacao, tipo })}
-                  type="button"
-                >
-                  <Icone aria-hidden="true" size={16} />
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="form-row">
-              <label>
-                Quantidade
-                <input
-                  min="1"
-                  ref={quantidadeMovRef}
-                  required
-                  type="number"
-                  value={movimentacao.quantidade}
-                  onChange={(event) =>
-                    setMovimentacao({ ...movimentacao, quantidade: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Usuário
-                <input
-                  disabled
-                  readOnly
-                  value={usuarioLogado?.nome || 'Usuário atual'}
-                  title="A autoria é registrada automaticamente a partir da sua conta"
-                />
-              </label>
-            </div>
-            <label>
-              Observação
-              <textarea
-                value={movimentacao.observacao}
-                onChange={(event) =>
-                  setMovimentacao({ ...movimentacao, observacao: event.target.value })
-                }
-                placeholder="Compra, perda, contagem manual..."
-              />
-            </label>
-            <button className="primary-button" disabled={salvando}>
-              Registrar movimentação
+          <div className="panel-header-actions">
+            <button
+              className="primary-button history-move-btn"
+              onClick={() => abrirModalMovimentacao()}
+              type="button"
+            >
+              <ArrowLeftRight aria-hidden="true" size={16} />
+              Movimentar
             </button>
-          </form>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Últimas movimentações</h2>
-            </div>
-            <button className="secondary-button summary-button" onClick={() => setResumoAberto(true)} type="button">
+            <button
+              className="secondary-button summary-button"
+              onClick={() => setResumoAberto(true)}
+              type="button"
+            >
               Resumo
             </button>
           </div>
+        </div>
 
-          <div className="timeline">
-            {movimentacoesVisiveis.map((item) => (
-              <button
-                key={item._id}
-                className="timeline-item"
-                onClick={() => setMovimentacaoSelecionada(item)}
-                type="button"
-              >
-                <span aria-hidden="true" className={`movement-dot ${item.tipo}`} />
-                <div>
-                  <strong>{item.produto?.nome || 'Produto removido'}</strong>
-                  <p>
-                    {rotuloTipoMovimentacao(item.tipo)} de {numero(item.quantidade)}{' '}
-                    {Number(item.quantidade) === 1 ? 'unidade' : 'unidades'}
-                  </p>
-                  <small>
-                    {dataCurta(item.createdAt)} por {item.usuario}
-                  </small>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {carregando && (
-            <div className="loading-state" role="status" aria-live="polite">
-              Carregando histórico de movimentações...
-            </div>
-          )}
-
-          {totalMovimentacoesOcultas > 0 && (
+        <div className="timeline">
+          {movimentacoesVisiveis.map((item) => (
             <button
-              aria-expanded={mostrarMovimentacoesAntigas}
-              className="secondary-button history-toggle"
-              onClick={() => setMostrarMovimentacoesAntigas((atual) => !atual)}
+              key={item._id}
+              className="timeline-item"
+              onClick={() => setMovimentacaoSelecionada(item)}
               type="button"
             >
-              {mostrarMovimentacoesAntigas
-                ? 'Mostrar apenas recentes'
-                : `Mostrar ${totalMovimentacoesOcultas} ${
-                    totalMovimentacoesOcultas === 1 ? 'movimentação antiga' : 'movimentações antigas'
-                  }`}
+              <span aria-hidden="true" className={`movement-dot ${item.tipo}`} />
+              <div>
+                <strong>{item.produto?.nome || 'Produto removido'}</strong>
+                <p>
+                  {rotuloTipoMovimentacao(item.tipo)} de {numero(item.quantidade)}{' '}
+                  {Number(item.quantidade) === 1 ? 'unidade' : 'unidades'}
+                </p>
+                <small>
+                  {dataCurta(item.createdAt)} por {item.usuario}
+                </small>
+              </div>
             </button>
-          )}
-
-          {!carregando && movimentacoes.length === 0 && (
-            <EmptyState
-              title="Sem movimentações"
-              text="As entradas, saídas e ajustes vão aparecer aqui."
-            />
-          )}
+          ))}
         </div>
+
+        {carregando && (
+          <div className="loading-state" role="status" aria-live="polite">
+            Carregando histórico de movimentações...
+          </div>
+        )}
+
+        {totalMovimentacoesOcultas > 0 && (
+          <button
+            aria-expanded={mostrarMovimentacoesAntigas}
+            className="secondary-button history-toggle"
+            onClick={() => setMostrarMovimentacoesAntigas((atual) => !atual)}
+            type="button"
+          >
+            {mostrarMovimentacoesAntigas
+              ? 'Mostrar apenas recentes'
+              : `Mostrar ${totalMovimentacoesOcultas} ${
+                  totalMovimentacoesOcultas === 1 ? 'movimentação antiga' : 'movimentações antigas'
+                }`}
+          </button>
+        )}
+
+        {!carregando && movimentacoes.length === 0 && (
+          <EmptyState
+            title="Sem movimentações"
+            text="As entradas, saídas e ajustes vão aparecer aqui."
+          />
+        )}
       </section>
 
       {produtoEditando && produtoEdicao && (
@@ -1900,6 +2024,279 @@ export default function App() {
                 <p className="summary-empty">Nenhuma movimentação nesse período.</p>
               )}
             </div>
+        </ModalDialog>
+      )}
+
+      {modalMovimentacaoAberto && (
+        <ModalDialog
+          className="movement-modal"
+          onClose={fecharModalMovimentacao}
+          titleId="movimentacao-modal-titulo"
+        >
+          <div className="modal-header">
+            <div>
+              <h2 id="movimentacao-modal-titulo">Movimentar estoque</h2>
+            </div>
+            <button
+              aria-label="Fechar movimentação de estoque"
+              className="icon-button modal-close"
+              disabled={salvando}
+              onClick={fecharModalMovimentacao}
+              title="Fechar"
+              type="button"
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+          </div>
+
+          <form className="form" onSubmit={salvarMovimentacao}>
+            <label>
+              Produto
+              <select
+                required
+                value={movimentacao.produto}
+                onChange={(event) =>
+                  setMovimentacao((atual) => ({ ...atual, produto: event.target.value }))
+                }
+              >
+                <option value="">Selecione um produto</option>
+                {produtos.map((item) => (
+                  <option key={item._id} value={item._id}>
+                    {item.nome} ({numero(item.quantidadeAtual)} {item.unidadeMedida})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div>
+              <div aria-label="Tipo de movimentação" className="movement-options" role="group">
+                {[
+                  ['entrada', ArrowUp, 'Entrada'],
+                  ['saida', ArrowDown, 'Saída'],
+                  ['ajuste', SlidersHorizontal, 'Ajuste']
+                ].map(([tipo, Icone, label]) => (
+                  <button
+                    aria-pressed={movimentacao.tipo === tipo}
+                    className={movimentacao.tipo === tipo ? 'active' : ''}
+                    key={tipo}
+                    onClick={() => selecionarTipoMovimentacao(tipo)}
+                    type="button"
+                  >
+                    <Icone aria-hidden="true" size={16} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {movimentacao.tipo === 'ajuste' && (
+                <p className="movement-hint">
+                  Ajuste substitui o saldo atual pelo valor informado.
+                </p>
+              )}
+            </div>
+
+            {produtoMovSelecionado && (
+              <div
+                aria-live="polite"
+                className={`movement-preview ${
+                  saldoInsuficienteMov ? 'is-invalid' : ficaraEmAlertaMov ? 'is-warning' : ''
+                }`}
+                role="status"
+              >
+                <div className="movement-preview-values">
+                  <div>
+                    <span>Saldo atual</span>
+                    <strong>
+                      {numero(saldoAtualMov)} {produtoMovSelecionado.unidadeMedida}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Novo saldo</span>
+                    <strong>
+                      {numero(novoSaldoMov)} {produtoMovSelecionado.unidadeMedida}
+                    </strong>
+                  </div>
+                </div>
+                {saldoInsuficienteMov && (
+                  <p className="movement-preview-note">
+                    <AlertTriangle aria-hidden="true" size={15} />
+                    Quantidade superior ao saldo disponível ({numero(saldoAtualMov)}{' '}
+                    {produtoMovSelecionado.unidadeMedida}).
+                  </p>
+                )}
+                {!saldoInsuficienteMov && ficaraEmAlertaMov && (
+                  <p className="movement-preview-note">
+                    <AlertTriangle aria-hidden="true" size={15} />
+                    O novo saldo ficará no limite ou abaixo do mínimo (
+                    {numero(produtoMovSelecionado.estoqueMinimo)} {produtoMovSelecionado.unidadeMedida}
+                    ).
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="field-block">
+              <label htmlFor="mov-quantidade-input">Quantidade</label>
+              <div className="qty-stepper">
+                <button
+                  aria-label="Diminuir quantidade"
+                  className="qty-step-btn"
+                  disabled={salvando || !qtdMovValida || qtdMovNumero <= 1}
+                  onClick={() =>
+                    setMovimentacao((atual) => ({
+                      ...atual,
+                      quantidade: Math.max(1, Math.floor(Number(atual.quantidade) || 1) - 1)
+                    }))
+                  }
+                  type="button"
+                >
+                  <Minus aria-hidden="true" size={16} />
+                </button>
+                <input
+                  id="mov-quantidade-input"
+                  min="1"
+                  ref={quantidadeMovRef}
+                  required
+                  type="number"
+                  value={movimentacao.quantidade}
+                  onChange={(event) =>
+                    setMovimentacao((atual) => ({ ...atual, quantidade: event.target.value }))
+                  }
+                />
+                <button
+                  aria-label="Aumentar quantidade"
+                  className="qty-step-btn"
+                  disabled={salvando}
+                  onClick={() =>
+                    setMovimentacao((atual) => ({
+                      ...atual,
+                      quantidade: Math.max(0, Math.floor(Number(atual.quantidade) || 0)) + 1
+                    }))
+                  }
+                  type="button"
+                >
+                  <Plus aria-hidden="true" size={16} />
+                </button>
+              </div>
+              <div aria-label="Atalhos de quantidade" className="qty-shortcuts" role="group">
+                {[1, 5, 10].map((incremento) => (
+                  <button
+                    className="quick-chip"
+                    disabled={salvando}
+                    key={incremento}
+                    onClick={() =>
+                      setMovimentacao((atual) => ({
+                        ...atual,
+                        quantidade: Math.max(0, Number(atual.quantidade) || 0) + incremento
+                      }))
+                    }
+                    type="button"
+                  >
+                    +{incremento}
+                  </button>
+                ))}
+                {movimentacao.tipo === 'saida' && saldoAtualMov > 0 && (
+                  <button
+                    className={`quick-chip ${qtdMovNumero === saldoAtualMov ? 'active' : ''}`}
+                    disabled={salvando}
+                    onClick={() =>
+                      setMovimentacao((atual) => ({ ...atual, quantidade: saldoAtualMov }))
+                    }
+                    type="button"
+                  >
+                    Tudo ({numero(saldoAtualMov)})
+                  </button>
+                )}
+                {movimentacao.tipo === 'ajuste' &&
+                  Number(produtoMovSelecionado?.estoqueMinimo || 0) > 0 && (
+                    <button
+                      className={`quick-chip ${
+                        qtdMovNumero === Number(produtoMovSelecionado.estoqueMinimo) ? 'active' : ''
+                      }`}
+                      disabled={salvando}
+                      onClick={() =>
+                        setMovimentacao((atual) => ({
+                          ...atual,
+                          quantidade: Number(produtoMovSelecionado.estoqueMinimo)
+                        }))
+                      }
+                      type="button"
+                    >
+                      Mínimo ({numero(produtoMovSelecionado.estoqueMinimo)})
+                    </button>
+                  )}
+              </div>
+            </div>
+
+            <div className="field-block">
+              <span className="field-caption">Motivo rápido</span>
+              <div aria-label="Motivos rápidos" className="reason-chips" role="group">
+                {(MOTIVOS_MOVIMENTACAO[movimentacao.tipo] || []).map((motivo) => {
+                  const ativo = movimentacao.observacao === motivo;
+                  return (
+                    <button
+                      aria-pressed={ativo}
+                      className={`quick-chip ${ativo ? 'active' : ''}`}
+                      disabled={salvando}
+                      key={motivo}
+                      onClick={() =>
+                        setMovimentacao((atual) => ({
+                          ...atual,
+                          observacao: atual.observacao === motivo ? '' : motivo
+                        }))
+                      }
+                      type="button"
+                    >
+                      {motivo}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <label>
+              Observação (opcional)
+              <input
+                placeholder="Ou escreva um motivo personalizado..."
+                type="text"
+                value={movimentacao.observacao}
+                onChange={(event) =>
+                  setMovimentacao((atual) => ({ ...atual, observacao: event.target.value }))
+                }
+              />
+            </label>
+
+            <div className="form-actions">
+              <button
+                className="primary-button"
+                disabled={salvando || !produtoMovSelecionado || !qtdMovValida || saldoInsuficienteMov}
+                type="submit"
+              >
+                {movimentacao.tipo === 'entrada'
+                  ? 'Registrar entrada'
+                  : movimentacao.tipo === 'saida'
+                    ? 'Registrar saída'
+                    : 'Aplicar ajuste'}
+              </button>
+              <button
+                className="secondary-button"
+                disabled={salvando}
+                onClick={fecharModalMovimentacao}
+                type="button"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </ModalDialog>
+      )}
+
+      {admin && isMobile && painelCadastroAberto && (
+        <ModalDialog
+          className="cadastro-modal"
+          onClose={() => !salvando && setPainelCadastroAberto(false)}
+          titleId="cadastro-modal-titulo"
+        >
+          {conteudoCadastro}
         </ModalDialog>
       )}
 
