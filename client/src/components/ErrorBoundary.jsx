@@ -14,7 +14,7 @@ export class ErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <main className="fatal-error">
-          <h1>O painel nao conseguiu abrir</h1>
+          <h1>O painel não conseguiu abrir</h1>
           <p>{this.state.error.message}</p>
           <span>Abra o terminal ou o console do navegador para ver o detalhe do erro.</span>
         </main>

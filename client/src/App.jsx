@@ -1,28 +1,28 @@
 import {
   AlertTriangle,
   ArrowDown,
+  ArrowLeftRight,
   ArrowUp,
   Boxes,
   CheckCircle2,
   LogOut,
   Moon,
-  ShieldCheck,
-  PackagePlus,
   PanelRightClose,
+  Pencil,
   Plus,
   RefreshCw,
-  Save,
-  Search,
   SlidersHorizontal,
   Sun,
-  UserPlus,
-  Users,
   Trash2,
-  X,
-  Truck
+  Truck,
+  X
 } from 'lucide-react';
 import React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DropdownMenu } from './components/arc/dropdown-menu/dropdown-menu.tsx';
+import { ExpandingSearch } from './components/arc/expanding-search/expanding-search.tsx';
+import { HoldToConfirm } from './components/arc/hold-to-confirm/hold-to-confirm.tsx';
+import Toast from './components/arc/toast/toast.tsx';
 import { EmptyState } from './components/EmptyState.jsx';
 import { MetricCard } from './components/MetricCard.jsx';
 import { ModalDialog } from './components/ModalDialog.jsx';
@@ -46,7 +46,7 @@ const TEMA_PADRAO = 'claro';
 const PERIODOS_RESUMO = {
   dia: { label: '1 dia', dias: 1 },
   semana: { label: '1 semana', dias: 7 },
-  mes: { label: '1 mes', dias: 30 }
+  mes: { label: '1 mês', dias: 30 }
 };
 const movimentacaoInicial = {
   produto: '',
@@ -83,6 +83,13 @@ function numero(valor) {
   return Number(valor || 0).toLocaleString('pt-BR');
 }
 
+function rotuloTipoMovimentacao(tipo) {
+  if (tipo === 'entrada') return 'Entrada';
+  if (tipo === 'saida') return 'Saída';
+  if (tipo === 'ajuste') return 'Ajuste';
+  return tipo || '-';
+}
+
 function temaInicial() {
   if (typeof window === 'undefined') {
     return TEMA_PADRAO;
@@ -113,7 +120,6 @@ export default function App() {
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState('');
   const [erro, setErro] = useState('');
-  const [precoEmEdicao, setPrecoEmEdicao] = useState(null);
   const [movimentacaoSelecionada, setMovimentacaoSelecionada] = useState(null);
   const [fornecedorSelecionado, setFornecedorSelecionado] = useState(null);
   const [mostrarMovimentacoesAntigas, setMostrarMovimentacoesAntigas] = useState(false);
@@ -128,10 +134,22 @@ export default function App() {
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [usuarioForm, setUsuarioForm] = useState(usuarioInicial);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
+  const [produtoParaRemover, setProdutoParaRemover] = useState(null);
+  const [remocaoConfirmada, setRemocaoConfirmada] = useState(false);
+  const [toast, setToast] = useState({ open: false, tone: 'success', title: '', description: '' });
+  const quantidadeMovRef = useRef(null);
 
   const admin = usuarioLogado?.papel === 'admin';
 
-  async function carregarDados() {
+  const mostrarToast = useCallback((tone, title, description = '') => {
+    setToast({ open: true, tone, title, description });
+  }, []);
+
+  const lidarMudancaToast = useCallback((open) => {
+    setToast((atual) => ({ ...atual, open }));
+  }, []);
+
+  async function carregarDados({ notificar = false } = {}) {
     setCarregando(true);
     setErro('');
 
@@ -169,9 +187,14 @@ export default function App() {
     const primeiraFalha = resultados.find((resultado) => resultado.status === 'rejected');
 
     if (primeiraFalha) {
-      setErro(
-        'A tela abriu, mas a API nao respondeu. Confira se o backend esta rodando e se o MongoDB Atlas autenticou corretamente.'
-      );
+      const textoErro =
+        'A tela abriu, mas a API não respondeu. Confira se o backend está rodando e se o MongoDB Atlas autenticou corretamente.';
+      setErro(textoErro);
+      if (notificar) {
+        mostrarToast('error', 'Falha ao atualizar', textoErro);
+      }
+    } else if (notificar) {
+      mostrarToast('success', 'Dados atualizados', 'Estoque e movimentações sincronizados.');
     }
 
     setCarregando(false);
@@ -205,7 +228,9 @@ export default function App() {
       setUsuarioLogado(resposta.usuario);
       setSetupNecessario(false);
       setLoginForm(loginInicial);
-      setMensagem(setupNecessario ? 'Administrador criado com sucesso.' : 'Login realizado.');
+      const textoSucesso = setupNecessario ? 'Administrador criado com sucesso.' : 'Login realizado.';
+      setMensagem(textoSucesso);
+      mostrarToast('success', textoSucesso);
       await carregarDados();
     } catch (error) {
       setErro(error.message);
@@ -224,6 +249,9 @@ export default function App() {
     setFornecedores([]);
     setMovimentacoes([]);
     setUsuarios([]);
+    setProdutoParaRemover(null);
+    setRemocaoConfirmada(false);
+    setToast({ open: false, tone: 'success', title: '', description: '' });
     setMensagem('');
     setErro('');
     api.authStatus().then((status) => setSetupNecessario(status.setupNecessario)).catch(() => {});
@@ -238,10 +266,12 @@ export default function App() {
     try {
       if (usuarioEditando) {
         await api.atualizarUsuario(usuarioEditando._id, usuarioForm);
-        setMensagem('Usuario atualizado.');
+        setMensagem('Usuário atualizado.');
+        mostrarToast('success', 'Usuário atualizado.', `${usuarioForm.nome} teve os dados salvos.`);
       } else {
         await api.criarUsuario(usuarioForm);
-        setMensagem('Usuario cadastrado.');
+        setMensagem('Usuário cadastrado.');
+        mostrarToast('success', 'Usuário cadastrado.', `${usuarioForm.nome} já pode acessar o painel.`);
       }
 
       setUsuarioForm(usuarioInicial);
@@ -249,6 +279,7 @@ export default function App() {
       await carregarUsuarios();
     } catch (error) {
       setErro(error.message);
+      mostrarToast('error', 'Erro ao salvar usuário', error.message);
     } finally {
       setSalvando(false);
     }
@@ -434,9 +465,11 @@ export default function App() {
     try {
       await acao();
       setMensagem(sucesso);
+      mostrarToast('success', sucesso);
       await carregarDados();
     } catch (error) {
       setErro(error.message);
+      mostrarToast('error', 'Não foi possível concluir', error.message);
     } finally {
       setSalvando(false);
     }
@@ -484,67 +517,62 @@ export default function App() {
           ...movimentacao,
           quantidade: Number(movimentacao.quantidade)
         }),
-      'Movimentacao registrada com sucesso.'
+      'Movimentação registrada com sucesso.'
     );
     setMovimentacao(movimentacaoInicial);
   }
 
-  async function removerProduto(item) {
-    const confirmou = window.confirm(`Remover "${item.nome}" do estoque?`);
+  function solicitarRemocaoProduto(item) {
+    setRemocaoConfirmada(false);
+    setProdutoParaRemover(item);
+  }
 
-    if (!confirmou) {
+  function fecharRemocaoProduto() {
+    if (salvando) {
       return;
     }
 
-    await executarAcao(() => api.removerProduto(item._id), 'Produto removido do estoque.');
+    setProdutoParaRemover(null);
+    setRemocaoConfirmada(false);
   }
 
-  function iniciarEdicaoPreco(item) {
-    setPrecoEmEdicao({
-      id: item._id,
-      valor: String(item.precoUnitario ?? 0)
-    });
-  }
-
-  async function salvarPreco(item) {
-    if (!precoEmEdicao || precoEmEdicao.id !== item._id) {
+  async function confirmarRemocaoProduto() {
+    if (!produtoParaRemover || salvando) {
       return;
     }
 
-    const novoPreco = Number(String(precoEmEdicao.valor).replace(',', '.'));
+    const alvo = produtoParaRemover;
+    setSalvando(true);
+    setErro('');
+    setMensagem('');
 
-    if (Number.isNaN(novoPreco) || novoPreco < 0) {
-      setErro('Informe um valor unitario valido.');
-      return;
+    try {
+      await api.removerProduto(alvo._id);
+      setRemocaoConfirmada(true);
+      await carregarDados();
+      setProdutoParaRemover(null);
+      setRemocaoConfirmada(false);
+      setMensagem('Produto removido do estoque.');
+      mostrarToast('success', 'Produto removido', `"${alvo.nome}" foi removido do estoque.`);
+    } catch (error) {
+      setRemocaoConfirmada(false);
+      setErro(error.message);
+      mostrarToast('error', 'Erro ao remover produto', error.message);
+    } finally {
+      setSalvando(false);
     }
-
-    setPrecoEmEdicao(null);
-
-    await executarAcao(
-      () =>
-        api.atualizarProduto(item._id, {
-          nome: item.nome,
-          categoria: item.categoria?._id || item.categoria,
-          fornecedor: item.fornecedor?._id || item.fornecedor,
-          quantidadeAtual: item.quantidadeAtual,
-          unidadeMedida: item.unidadeMedida,
-          estoqueMinimo: item.estoqueMinimo,
-          precoUnitario: novoPreco,
-          ativo: item.ativo
-        }),
-      'Valor unitario atualizado.'
-    );
   }
 
-  function lidarTeclaPreco(event, item) {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      salvarPreco(item);
-    }
-
-    if (event.key === 'Escape') {
-      setPrecoEmEdicao(null);
-    }
+  function prepararMovimentacaoProduto(item) {
+    setMovimentacao((atual) => ({ ...atual, produto: item._id }));
+    const painel = document.getElementById('movimentar-estoque');
+    const reduzir =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    painel?.scrollIntoView({ behavior: reduzir ? 'auto' : 'smooth', block: 'center' });
+    window.setTimeout(() => {
+      quantidadeMovRef.current?.focus();
+    }, 200);
   }
 
   function abrirEdicaoProduto(item) {
@@ -589,22 +617,58 @@ export default function App() {
         precoUnitario: Number(String(produtoEdicao.precoUnitario).replace(',', '.'))
       });
       setMensagem('Produto atualizado.');
+      mostrarToast('success', 'Produto atualizado.', `"${produtoEdicao.nome}" salvo no estoque.`);
       await carregarDados();
       fecharEdicaoProduto();
     } catch (error) {
       setErro(error.message);
+      mostrarToast('error', 'Erro ao atualizar produto', error.message);
     } finally {
       setSalvando(false);
     }
   }
 
+  const totalEmAlerta = Number(dashboard?.totais?.produtosEmAlerta || 0);
+  const filtrandoAlertas = filtrosProduto.status === 'alerta';
+
+  const produtosEmAlerta = useMemo(
+    () => produtos.filter((item) => item.emAlerta),
+    [produtos]
+  );
+
+  const itensBuscaProdutos = useMemo(
+    () =>
+      produtos.map((item) => ({
+        id: item._id,
+        title: item.nome,
+        meta: `${numero(item.quantidadeAtual)} ${item.unidadeMedida} · ${item.categoria?.nome || 'Sem categoria'}`,
+        keywords: [
+          item.categoria?.nome,
+          item.fornecedor?.nome,
+          item.unidadeMedida,
+          item.emAlerta ? 'alerta' : 'ok'
+        ].filter(Boolean),
+        icon: item.emAlerta ? <AlertTriangle size={15} /> : <Boxes size={15} />
+      })),
+    [produtos]
+  );
+
+  const sugestoesBuscaProdutos = useMemo(() => {
+    const base = produtosEmAlerta.length > 0 ? produtosEmAlerta : produtos;
+    return base.slice(0, 4).map((item) => ({
+      id: item._id,
+      title: item.nome,
+      meta: `${numero(item.quantidadeAtual)} ${item.unidadeMedida} · ${item.categoria?.nome || 'Sem categoria'}`,
+      icon: item.emAlerta ? <AlertTriangle size={15} /> : <Boxes size={15} />
+    }));
+  }, [produtosEmAlerta, produtos]);
+
   if (authCarregando) {
     return (
       <main className="auth-shell">
         <section className="auth-card">
-          <ShieldCheck aria-hidden="true" size={28} />
           <h1>Carregando acesso</h1>
-          <p>Conferindo a sessao do sistema.</p>
+          <p>Conferindo a sessão do sistema.</p>
         </section>
       </main>
     );
@@ -615,9 +679,7 @@ export default function App() {
       <main className="auth-shell">
         <section className="auth-card">
           <div className="auth-header">
-            <ShieldCheck aria-hidden="true" size={30} />
             <div>
-              <span className="eyebrow">Acesso seguro</span>
               <h1>{setupNecessario ? 'Criar administrador' : 'Entrar no estoque'}</h1>
             </div>
           </div>
@@ -655,11 +717,10 @@ export default function App() {
                 type="password"
                 value={loginForm.senha}
                 onChange={(event) => setLoginForm({ ...loginForm, senha: event.target.value })}
-                placeholder={setupNecessario ? 'Minimo 8 caracteres' : 'Sua senha'}
+                placeholder={setupNecessario ? 'Mínimo de 8 caracteres' : 'Sua senha'}
               />
             </label>
             <button className="primary-button" disabled={salvando} type="submit">
-              <ShieldCheck aria-hidden="true" size={17} />
               {setupNecessario ? 'Criar admin' : 'Entrar'}
             </button>
           </form>
@@ -672,12 +733,11 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <span className="eyebrow">Lanchonete</span>
-          <h1>Gestao de Estoque</h1>
+          <span className="brand-context">Lanchonete</span>
+          <h1>Gestão de Estoque</h1>
         </div>
         <div className="topbar-actions">
           <div className="user-badge">
-            <ShieldCheck aria-hidden="true" size={16} />
             <span>{usuarioLogado.nome}</span>
             <strong>{usuarioLogado.papel === 'admin' ? 'Admin' : 'Operador'}</strong>
           </div>
@@ -694,7 +754,7 @@ export default function App() {
           <button
             aria-label="Atualizar dados"
             className="icon-button"
-            onClick={carregarDados}
+            onClick={() => carregarDados({ notificar: true })}
             title="Atualizar dados"
             type="button"
           >
@@ -712,34 +772,51 @@ export default function App() {
         </div>
       </header>
 
-      {erro && <div className="notice notice-error">{erro}</div>}
-      {mensagem && <div className="notice notice-success">{mensagem}</div>}
+      {!dashboard && erro && (
+        <div className="notice notice-error" role="alert">
+          {erro}
+        </div>
+      )}
 
       <section className="metrics-grid">
+        <MetricCard
+          active={filtrandoAlertas}
+          helper={
+            filtrandoAlertas
+              ? 'Filtro ativo: clique para mostrar todos'
+              : totalEmAlerta > 0
+                ? 'Clique para filtrar itens críticos'
+                : 'Todos os itens acima do mínimo'
+          }
+          highlighted={totalEmAlerta > 0}
+          label="Itens em alerta"
+          onClick={() =>
+            setFiltrosProduto((atual) => ({
+              ...atual,
+              status: atual.status === 'alerta' ? '' : 'alerta'
+            }))
+          }
+          tone="warning"
+          value={dashboard?.totais?.produtosEmAlerta ?? '-'}
+        />
         <MetricCard label="Produtos ativos" value={dashboard?.totais?.produtos ?? '-'} />
         <MetricCard
-          label="Itens em alerta"
-          value={dashboard?.totais?.produtosEmAlerta ?? '-'}
-          tone="warning"
-        />
-        <MetricCard
           label="Unidades no estoque"
-          value={numero(dashboard?.totais?.itensEmEstoque)}
           tone="stock"
+          value={numero(dashboard?.totais?.itensEmEstoque)}
         />
         <MetricCard
           label="Valor estimado"
-          value={moeda(dashboard?.totais?.valorEstoque)}
           tone="money"
+          value={moeda(dashboard?.totais?.valorEstoque)}
         />
       </section>
 
       <section className={`work-grid ${(!admin || !painelCadastroAberto) ? 'single-column' : 'with-aside'}`}>
-        <div className="panel panel-wide">
+        <div className="panel panel-wide" id="tabela-produtos">
           <div className="panel-header inventory-header">
             <div className="inventory-title-bar">
               <div>
-                <span className="eyebrow">Inventario</span>
                 <h2>Produtos</h2>
               </div>
               {admin && (
@@ -756,22 +833,11 @@ export default function App() {
                   ) : (
                     <Plus aria-hidden="true" size={16} />
                   )}
-                  <span>{painelCadastroAberto ? 'Ocultar cadastro' : 'Adicionar dados'}</span>
+                  <span>{painelCadastroAberto ? 'Ocultar cadastro' : 'Novo cadastro'}</span>
                 </button>
               )}
             </div>
             <div className="product-filters">
-              <label className="search-box">
-                <span className="sr-only">Buscar produto, categoria ou fornecedor</span>
-                <Search aria-hidden="true" size={17} />
-                <input
-                  aria-label="Buscar produto, categoria ou fornecedor"
-                  type="search"
-                  value={busca}
-                  onChange={(event) => setBusca(event.target.value)}
-                  placeholder="Buscar produto, categoria ou fornecedor"
-                />
-              </label>
               <select
                 aria-label="Filtrar por categoria"
                 value={filtrosProduto.categoria}
@@ -814,6 +880,21 @@ export default function App() {
               <button className="secondary-button filter-clear" onClick={limparFiltrosProduto} type="button">
                 Limpar
               </button>
+              <div className="table-search-slot">
+                <ExpandingSearch
+                  anchor="end"
+                  collapseOnSelect={false}
+                  emptyHint="Limpe os filtros ou tente outro nome, categoria ou fornecedor."
+                  expandedWidth={320}
+                  items={itensBuscaProdutos}
+                  label="Buscar produto, categoria ou fornecedor"
+                  onValueChange={setBusca}
+                  placeholder="Buscar produto, categoria ou fornecedor"
+                  suggestions={sugestoesBuscaProdutos}
+                  suggestionsLabel={produtosEmAlerta.length > 0 ? 'Itens em alerta' : 'Produtos'}
+                  value={busca}
+                />
+              </div>
             </div>
           </div>
 
@@ -825,10 +906,10 @@ export default function App() {
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('categoria')} type="button">Categoria <span>{indicadorOrdenacao('categoria')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('fornecedor')} type="button">Fornecedor <span>{indicadorOrdenacao('fornecedor')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('quantidadeAtual')} type="button">Qtd. <span>{indicadorOrdenacao('quantidadeAtual')}</span></button></th>
-                  <th><button className="sort-button" onClick={() => alternarOrdenacao('estoqueMinimo')} type="button">Min. <span>{indicadorOrdenacao('estoqueMinimo')}</span></button></th>
+                  <th><button className="sort-button" onClick={() => alternarOrdenacao('estoqueMinimo')} type="button">Mín. <span>{indicadorOrdenacao('estoqueMinimo')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('precoUnitario')} type="button">Valor <span>{indicadorOrdenacao('precoUnitario')}</span></button></th>
                   <th><button className="sort-button" onClick={() => alternarOrdenacao('status')} type="button">Status <span>{indicadorOrdenacao('status')}</span></button></th>
-                  {admin && <th>Acoes</th>}
+                  {admin && <th>Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -854,31 +935,31 @@ export default function App() {
                       </span>
                     </td>
                     {admin && (
-                      <td>
-                        <div className="table-actions-group">
-                          <button
-                            className="table-action"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              abrirEdicaoProduto(item);
-                            }}
-                            title={`Editar ${item.nome}`}
-                            type="button"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            className="table-action danger"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              removerProduto(item);
-                            }}
-                            title={`Remover ${item.nome}`}
-                            type="button"
-                          >
-                            <Trash2 aria-hidden="true" size={15} />
-                            Remover
-                          </button>
+                      <td onClick={(event) => event.stopPropagation()}>
+                        <div onClick={(event) => event.stopPropagation()}>
+                          <DropdownMenu
+                            ariaLabel={`Ações para ${item.nome}`}
+                            items={[
+                              {
+                                label: 'Editar produto',
+                                icon: <Pencil size={15} />,
+                                onSelect: () => abrirEdicaoProduto(item)
+                              },
+                              {
+                                label: 'Movimentar estoque',
+                                icon: <ArrowLeftRight size={15} />,
+                                onSelect: () => prepararMovimentacaoProduto(item)
+                              },
+                              {
+                                label: 'Remover produto',
+                                icon: <Trash2 size={15} />,
+                                destructive: true,
+                                separatorBefore: true,
+                                onSelect: () => solicitarRemocaoProduto(item)
+                              }
+                            ]}
+                            label="Ações"
+                          />
                         </div>
                       </td>
                     )}
@@ -906,7 +987,7 @@ export default function App() {
               <EmptyState
                 text={
                   admin
-                    ? 'Use o botao Adicionar dados para cadastrar o primeiro produto.'
+                    ? 'Use o botão Novo cadastro para cadastrar o primeiro produto.'
                     : 'Nenhum item cadastrado no estoque no momento.'
                 }
                 title="Nenhum produto cadastrado"
@@ -925,8 +1006,7 @@ export default function App() {
           <div className="aside-form-inner">
             <div className="panel-header">
             <div>
-              <span className="eyebrow">Cadastro</span>
-              <h2>Adicionar dados</h2>
+              <h2>Novo cadastro</h2>
             </div>
             <button
               aria-label="Fechar painel de cadastro"
@@ -947,7 +1027,7 @@ export default function App() {
               role="tab"
               type="button"
             >
-              <Boxes aria-hidden="true" size={16} />
+              <Boxes aria-hidden="true" size={15} />
               Produto
             </button>
             <button
@@ -957,7 +1037,7 @@ export default function App() {
               role="tab"
               type="button"
             >
-              <SlidersHorizontal aria-hidden="true" size={16} />
+              <SlidersHorizontal aria-hidden="true" size={15} />
               Categoria
             </button>
             <button
@@ -967,7 +1047,7 @@ export default function App() {
               role="tab"
               type="button"
             >
-              <Truck aria-hidden="true" size={16} />
+              <Truck aria-hidden="true" size={15} />
               Fornecedor
             </button>
           </div>
@@ -980,7 +1060,7 @@ export default function App() {
                   required
                   value={produto.nome}
                   onChange={(event) => atualizarProduto('nome', event.target.value)}
-                  placeholder="Ex.: Hamburguer bovino"
+                  placeholder="Ex.: Hambúrguer bovino"
                 />
               </label>
               <div className="form-row">
@@ -1037,7 +1117,7 @@ export default function App() {
               </div>
               <div className="form-row">
                 <label>
-                  Estoque minimo
+                  Estoque mínimo
                   <input
                     min="0"
                     required
@@ -1047,7 +1127,7 @@ export default function App() {
                   />
                 </label>
                 <label>
-                  Preco unitario
+                  Preço unitário
                   <input
                     min="0"
                     required
@@ -1059,7 +1139,6 @@ export default function App() {
                 </label>
               </div>
               <button className="primary-button" disabled={salvando}>
-                <Save aria-hidden="true" size={17} />
                 Salvar produto
               </button>
             </form>
@@ -1077,7 +1156,7 @@ export default function App() {
                 />
               </label>
               <label>
-                Descricao
+                Descrição
                 <textarea
                   value={categoria.descricao}
                   onChange={(event) =>
@@ -1087,7 +1166,6 @@ export default function App() {
                 />
               </label>
               <button className="primary-button" disabled={salvando}>
-                <Save aria-hidden="true" size={17} />
                 Salvar categoria
               </button>
             </form>
@@ -1133,7 +1211,7 @@ export default function App() {
                 />
               </label>
               <label>
-                Endereco
+                Endereço
                 <input
                   value={fornecedor.endereco}
                   onChange={(event) =>
@@ -1142,7 +1220,6 @@ export default function App() {
                 />
               </label>
               <button className="primary-button" disabled={salvando}>
-                <Save aria-hidden="true" size={17} />
                 Salvar fornecedor
               </button>
             </form>
@@ -1155,10 +1232,8 @@ export default function App() {
       <section className="panel supplier-panel">
         <div className="panel-header">
           <div>
-            <span className="eyebrow">Parceiros</span>
             <h2>Fornecedores</h2>
           </div>
-          <Truck aria-hidden="true" size={20} />
         </div>
 
         <div className="table-wrap">
@@ -1189,7 +1264,7 @@ export default function App() {
                     >
                       <strong>{item.nome}</strong>
                     </button>
-                    <span>{item.endereco || 'Sem endereco'}</span>
+                    <span>{item.endereco || 'Sem endereço'}</span>
                   </td>
                   <td>{item.telefone || '-'}</td>
                   <td>{item.email || '-'}</td>
@@ -1209,7 +1284,7 @@ export default function App() {
         {!carregando && fornecedores.length === 0 && (
           <EmptyState
             title="Nenhum fornecedor cadastrado"
-            text="Cadastre fornecedores para consulta-los nesta tabela."
+            text="Cadastre fornecedores para consultá-los nesta tabela."
           />
         )}
       </section>
@@ -1218,10 +1293,8 @@ export default function App() {
         <section className="panel users-panel">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">Administracao</span>
-              <h2>Usuarios do sistema</h2>
+              <h2>Usuários do sistema</h2>
             </div>
-            <Users aria-hidden="true" size={20} />
           </div>
 
           <div className="users-grid">
@@ -1264,7 +1337,7 @@ export default function App() {
                     type="password"
                     value={usuarioForm.senha}
                     onChange={(event) => setUsuarioForm({ ...usuarioForm, senha: event.target.value })}
-                    placeholder={usuarioEditando ? 'Deixe em branco para manter' : 'Minimo 8 caracteres'}
+                    placeholder={usuarioEditando ? 'Deixe em branco para manter' : 'Mínimo de 8 caracteres'}
                   />
                 </label>
               </div>
@@ -1278,7 +1351,7 @@ export default function App() {
                       }
                       type="checkbox"
                     />
-                    Usuario ativo
+                    Usuário ativo
                   </label>
                   <label>
                     Sua senha de admin
@@ -1289,15 +1362,14 @@ export default function App() {
                       onChange={(event) =>
                         setUsuarioForm({ ...usuarioForm, senhaConfirmacao: event.target.value })
                       }
-                      placeholder="Obrigatoria para alterar login"
+                      placeholder="Obrigatória para alterar login"
                     />
                   </label>
                 </>
               )}
               <div className="form-actions">
                 <button className="primary-button user-submit-btn" disabled={salvando} type="submit">
-                  <UserPlus aria-hidden="true" size={15} />
-                  {usuarioEditando ? 'Salvar usuario' : 'Cadastrar usuario'}
+                  {usuarioEditando ? 'Salvar usuário' : 'Cadastrar usuário'}
                 </button>
                 {usuarioEditando && (
                   <button className="secondary-button user-cancel-btn" onClick={cancelarEdicaoUsuario} type="button">
@@ -1312,10 +1384,10 @@ export default function App() {
                 <table className="compact-table">
                   <thead>
                     <tr>
-                      <th>Usuario</th>
+                      <th>Usuário</th>
                       <th>Perfil</th>
                       <th>Status</th>
-                      <th>Acoes</th>
+                      <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1344,14 +1416,14 @@ export default function App() {
 
               {carregandoUsuarios && (
                 <div className="loading-state" role="status" aria-live="polite">
-                  Carregando usuarios...
+                  Carregando usuários...
                 </div>
               )}
 
               {!carregandoUsuarios && usuarios.length === 0 && (
                 <EmptyState
-                  text="Preencha o formulario ao lado para criar o primeiro usuario."
-                  title="Nenhum usuario cadastrado"
+                  text="Preencha o formulário ao lado para criar o primeiro usuário."
+                  title="Nenhum usuário cadastrado"
                 />
               )}
             </div>
@@ -1360,13 +1432,11 @@ export default function App() {
       )}
 
       <section className="bottom-grid">
-        <div className="panel">
+        <div className="panel" id="movimentar-estoque">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">Operacao</span>
               <h2>Movimentar estoque</h2>
             </div>
-            <PackagePlus aria-hidden="true" size={20} />
           </div>
 
           <form className="form" onSubmit={salvarMovimentacao}>
@@ -1387,10 +1457,10 @@ export default function App() {
                 ))}
               </select>
             </label>
-            <div aria-label="Tipo de movimentacao" className="movement-options" role="group">
+            <div aria-label="Tipo de movimentação" className="movement-options" role="group">
               {[
                 ['entrada', ArrowUp, 'Entrada'],
-                ['saida', ArrowDown, 'Saida'],
+                ['saida', ArrowDown, 'Saída'],
                 ['ajuste', SlidersHorizontal, 'Ajuste']
               ].map(([tipo, Icone, label]) => (
                 <button
@@ -1410,6 +1480,7 @@ export default function App() {
                 Quantidade
                 <input
                   min="1"
+                  ref={quantidadeMovRef}
                   required
                   type="number"
                   value={movimentacao.quantidade}
@@ -1419,17 +1490,17 @@ export default function App() {
                 />
               </label>
               <label>
-                Usuario
+                Usuário
                 <input
                   disabled
                   readOnly
-                  value={usuarioLogado?.nome || 'Usuario atual'}
-                  title="A autoria e registrada automaticamente a partir da sua conta"
+                  value={usuarioLogado?.nome || 'Usuário atual'}
+                  title="A autoria é registrada automaticamente a partir da sua conta"
                 />
               </label>
             </div>
             <label>
-              Observacao
+              Observação
               <textarea
                 value={movimentacao.observacao}
                 onChange={(event) =>
@@ -1439,8 +1510,7 @@ export default function App() {
               />
             </label>
             <button className="primary-button" disabled={salvando}>
-              <Save aria-hidden="true" size={17} />
-              Registrar movimentacao
+              Registrar movimentação
             </button>
           </form>
         </div>
@@ -1448,8 +1518,7 @@ export default function App() {
         <div className="panel">
           <div className="panel-header">
             <div>
-              <span className="eyebrow">Historico</span>
-              <h2>Ultimas movimentacoes</h2>
+              <h2>Últimas movimentações</h2>
             </div>
             <button className="secondary-button summary-button" onClick={() => setResumoAberto(true)} type="button">
               Resumo
@@ -1468,7 +1537,8 @@ export default function App() {
                 <div>
                   <strong>{item.produto?.nome || 'Produto removido'}</strong>
                   <p>
-                    {item.tipo} de {numero(item.quantidade)} unidade(s)
+                    {rotuloTipoMovimentacao(item.tipo)} de {numero(item.quantidade)}{' '}
+                    {Number(item.quantidade) === 1 ? 'unidade' : 'unidades'}
                   </p>
                   <small>
                     {dataCurta(item.createdAt)} por {item.usuario}
@@ -1480,7 +1550,7 @@ export default function App() {
 
           {carregando && (
             <div className="loading-state" role="status" aria-live="polite">
-              Carregando historico de movimentacoes...
+              Carregando histórico de movimentações...
             </div>
           )}
 
@@ -1493,14 +1563,16 @@ export default function App() {
             >
               {mostrarMovimentacoesAntigas
                 ? 'Mostrar apenas recentes'
-                : `Mostrar ${totalMovimentacoesOcultas} movimentacao(oes) antiga(s)`}
+                : `Mostrar ${totalMovimentacoesOcultas} ${
+                    totalMovimentacoesOcultas === 1 ? 'movimentação antiga' : 'movimentações antigas'
+                  }`}
             </button>
           )}
 
           {!carregando && movimentacoes.length === 0 && (
             <EmptyState
-              title="Sem movimentacoes"
-              text="As entradas, saidas e ajustes vao aparecer aqui."
+              title="Sem movimentações"
+              text="As entradas, saídas e ajustes vão aparecer aqui."
             />
           )}
         </div>
@@ -1514,11 +1586,10 @@ export default function App() {
         >
             <div className="modal-header">
               <div>
-                <span className="eyebrow">Confirmar alteracao</span>
                 <h2 id="produto-edicao-titulo">Editar produto</h2>
               </div>
               <button
-                aria-label="Fechar edicao de produto"
+                aria-label="Fechar edição de produto"
                 className="icon-button modal-close"
                 onClick={fecharEdicaoProduto}
                 title="Fechar"
@@ -1589,7 +1660,7 @@ export default function App() {
                   />
                 </label>
                 <label>
-                  Estoque minimo
+                  Estoque mínimo
                   <input
                     min="0"
                     required
@@ -1613,7 +1684,7 @@ export default function App() {
                   />
                 </label>
                 <label>
-                  Preco unitario
+                  Preço unitário
                   <input
                     min="0"
                     required
@@ -1627,12 +1698,11 @@ export default function App() {
                 </label>
               </div>
               <p className="confirm-note">
-                Revise as alteracoes antes de confirmar. A atualizacao sera aplicada ao estoque.
+                Revise as alterações antes de confirmar. A atualização será aplicada ao estoque.
               </p>
               <div className="form-actions">
                 <button className="primary-button" disabled={salvando} type="submit">
-                  <Save aria-hidden="true" size={17} />
-                  Confirmar alteracao
+                  Confirmar alteração
                 </button>
                 <button className="secondary-button" onClick={fecharEdicaoProduto} type="button">
                   Cancelar
@@ -1649,13 +1719,13 @@ export default function App() {
         >
             <div className="modal-header">
               <div>
-                <span className="eyebrow">Movimentacao</span>
+                <span className="modal-subtitle">Movimentação</span>
                 <h2 id="movimentacao-titulo">
                   {movimentacaoSelecionada.produto?.nome || 'Produto removido'}
                 </h2>
               </div>
               <button
-                aria-label="Fechar detalhes da movimentacao"
+                aria-label="Fechar detalhes da movimentação"
                 className="icon-button modal-close"
                 onClick={() => setMovimentacaoSelecionada(null)}
                 title="Fechar"
@@ -1668,14 +1738,14 @@ export default function App() {
             <div className="detail-grid">
               <div>
                 <span>Tipo</span>
-                <strong className="capitalize">{movimentacaoSelecionada.tipo}</strong>
+                <strong>{rotuloTipoMovimentacao(movimentacaoSelecionada.tipo)}</strong>
               </div>
               <div>
                 <span>Quantidade</span>
                 <strong>{numero(movimentacaoSelecionada.quantidade)}</strong>
               </div>
               <div>
-                <span>Usuario</span>
+                <span>Usuário</span>
                 <strong>{movimentacaoSelecionada.usuario || '-'}</strong>
               </div>
               <div>
@@ -1693,8 +1763,8 @@ export default function App() {
             </div>
 
             <div className="detail-note">
-              <span>Observacao</span>
-              <p>{movimentacaoSelecionada.observacao || 'Sem observacao registrada.'}</p>
+              <span>Observação</span>
+              <p>{movimentacaoSelecionada.observacao || 'Sem observação registrada.'}</p>
             </div>
         </ModalDialog>
       )}
@@ -1706,7 +1776,7 @@ export default function App() {
         >
             <div className="modal-header">
               <div>
-                <span className="eyebrow">Fornecedor</span>
+                <span className="modal-subtitle">Fornecedor</span>
                 <h2 id="fornecedor-titulo">{fornecedorSelecionado.nome}</h2>
               </div>
               <button
@@ -1752,8 +1822,8 @@ export default function App() {
             </div>
 
             <div className="detail-note">
-              <span>Endereco</span>
-              <p>{fornecedorSelecionado.endereco || 'Sem endereco registrado.'}</p>
+              <span>Endereço</span>
+              <p>{fornecedorSelecionado.endereco || 'Sem endereço registrado.'}</p>
             </div>
         </ModalDialog>
       )}
@@ -1766,8 +1836,7 @@ export default function App() {
         >
             <div className="modal-header">
               <div>
-                <span className="eyebrow">Resumo</span>
-                <h2 id="resumo-titulo">Movimentacoes por periodo</h2>
+                <h2 id="resumo-titulo">Movimentações por período</h2>
               </div>
               <button
                 aria-label="Fechar resumo"
@@ -1780,7 +1849,7 @@ export default function App() {
               </button>
             </div>
 
-            <div aria-label="Periodo do resumo" className="period-tabs" role="tablist">
+            <div aria-label="Período do resumo" className="period-tabs" role="tablist">
               {Object.entries(PERIODOS_RESUMO).map(([valor, periodo]) => (
                 <button
                   aria-selected={periodoResumo === valor}
@@ -1805,7 +1874,7 @@ export default function App() {
                 <strong>{numero(resumoMovimentacoes.porTipo.entrada)}</strong>
               </div>
               <div>
-                <span>Saidas</span>
+                <span>Saídas</span>
                 <strong>{numero(resumoMovimentacoes.porTipo.saida)}</strong>
               </div>
               <div>
@@ -1822,17 +1891,85 @@ export default function App() {
                     <strong>{item.produto}</strong>
                     <div>
                       <span>Entrada: {numero(item.entrada)}</span>
-                      <span>Saida: {numero(item.saida)}</span>
+                      <span>Saída: {numero(item.saida)}</span>
                       <span>Ajuste: {numero(item.ajuste)}</span>
                     </div>
                   </article>
                 ))
               ) : (
-                <p className="summary-empty">Nenhuma movimentacao nesse periodo.</p>
+                <p className="summary-empty">Nenhuma movimentação nesse período.</p>
               )}
             </div>
         </ModalDialog>
       )}
+
+      {produtoParaRemover && (
+        <ModalDialog
+          className="delete-confirm-modal"
+          onClose={fecharRemocaoProduto}
+          titleId="produto-remocao-titulo"
+        >
+          <div className="modal-header">
+            <div>
+              <h2 id="produto-remocao-titulo">Remover produto</h2>
+            </div>
+            <button
+              aria-label="Fechar confirmação de remoção"
+              className="icon-button modal-close"
+              disabled={salvando}
+              onClick={fecharRemocaoProduto}
+              title="Fechar"
+              type="button"
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+          </div>
+
+          <div className="delete-confirm-summary">
+            <strong>{produtoParaRemover.nome}</strong>
+            <span>
+              {produtoParaRemover.categoria?.nome || 'Sem categoria'} ·{' '}
+              {numero(produtoParaRemover.quantidadeAtual)} {produtoParaRemover.unidadeMedida}
+            </span>
+          </div>
+
+          <p className="confirm-note delete-confirm-note">
+            Esta ação remove o item do catálogo ativo do estoque. Segure o botão abaixo para confirmar.
+          </p>
+
+          <div className="delete-confirm-actions">
+            <HoldToConfirm
+              key={produtoParaRemover._id}
+              confirmed={remocaoConfirmada}
+              confirmedLabel="Removido"
+              disabled={salvando}
+              duration={1100}
+              label="Segure para remover"
+              onConfirm={confirmarRemocaoProduto}
+              tone="danger"
+            />
+            <button
+              className="secondary-button"
+              disabled={salvando}
+              onClick={fecharRemocaoProduto}
+              type="button"
+            >
+              Cancelar
+            </button>
+          </div>
+        </ModalDialog>
+      )}
+
+      <div className="toast-viewport">
+        <Toast
+          description={toast.description || undefined}
+          duration={4500}
+          onOpenChange={lidarMudancaToast}
+          open={toast.open}
+          title={toast.title}
+          tone={toast.tone}
+        />
+      </div>
     </main>
   );
 }
