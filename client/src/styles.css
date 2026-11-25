@@ -1466,6 +1466,28 @@ td.col-num {
   border-color: var(--status-danger-border);
 }
 
+.panel-hint {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+
+.user-status-stack {
+  align-items: flex-start;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inactive-countdown {
+  color: var(--status-danger-text);
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
 .movement-badge {
   align-items: center;
   border: 1px solid var(--border);
@@ -2863,6 +2885,10 @@ textarea:disabled {
 
   .users-table .cell-status::before {
     display: none;
+  }
+
+  .users-table .user-status-stack {
+    align-items: flex-end;
   }
 
   .users-table .cell-role {

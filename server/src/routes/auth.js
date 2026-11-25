@@ -5,6 +5,8 @@ import { Usuario } from '../models/Usuario.js';
 import { criarToken } from '../utils/security.js';
 
 const router = Router();
+export const DIAS_REMOCAO_INATIVO = 60;
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -102,8 +104,29 @@ router.get('/me', requireAuth, async (req, res) => {
   res.json(usuarioSeguro(req.user));
 });
 
+export async function limparUsuariosInativosExpirados(agora = new Date()) {
+  const dataLimite = new Date(agora.getTime() - DIAS_REMOCAO_INATIVO * MS_POR_DIA);
+  const possuiAdminAtivo = await existeOutroAdmin();
+  const filtro = {
+    ativo: false,
+    $or: [
+      { inativadoEm: { $lte: dataLimite } },
+      { inativadoEm: null, updatedAt: { $lte: dataLimite } },
+      { inativadoEm: { $exists: false }, updatedAt: { $lte: dataLimite } }
+    ]
+  };
+
+  if (!possuiAdminAtivo) {
+    filtro.papel = { $ne: 'admin' };
+  }
+
+  const resultado = await Usuario.deleteMany(filtro);
+  return resultado?.deletedCount || 0;
+}
+
 router.get('/usuarios', requireAuth, requireAdmin, async (req, res, next) => {
   try {
+    await limparUsuariosInativosExpirados();
     const usuarios = await Usuario.find().sort({ nome: 1 });
     res.json(usuarios.map(usuarioSeguro));
   } catch (error) {
@@ -162,7 +185,14 @@ router.put('/usuarios/:id', requireAuth, requireAdmin, async (req, res, next) =>
     if (nome) usuario.nome = nome;
     if (email) usuario.email = email;
     if (papel) usuario.papel = papel;
-    if (typeof ativo === 'boolean') usuario.ativo = ativo;
+    if (typeof ativo === 'boolean') {
+      if (ativo !== usuario.ativo) {
+        usuario.inativadoEm = ativo ? null : new Date();
+      } else if (!ativo && !usuario.inativadoEm) {
+        usuario.inativadoEm = new Date();
+      }
+      usuario.ativo = ativo;
+    }
     if (senha) {
       const erroSenha = validarComplexidadeSenha(senha);
       if (erroSenha) {

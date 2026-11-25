@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAdmin } from '../middleware/auth.js';
 import { Fornecedor } from '../models/Fornecedor.js';
+import { Produto } from '../models/Produto.js';
 
 const router = Router();
 
@@ -41,6 +42,17 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
 
 router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {
+    const possuiProdutoAtivo = await Produto.exists({
+      fornecedor: req.params.id,
+      ativo: true
+    });
+
+    if (possuiProdutoAtivo) {
+      return res.status(409).json({
+        message: 'Nao e possivel remover um fornecedor com produtos ativos vinculados.'
+      });
+    }
+
     const fornecedor = await Fornecedor.findByIdAndDelete(req.params.id);
 
     if (!fornecedor) {

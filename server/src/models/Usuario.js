@@ -27,6 +27,10 @@ const usuarioSchema = new mongoose.Schema(
     ativo: {
       type: Boolean,
       default: true
+    },
+    inativadoEm: {
+      type: Date,
+      default: null
     }
   },
   { timestamps: true }
@@ -41,12 +45,14 @@ usuarioSchema.methods.validarSenha = async function validarSenha(senha) {
 };
 
 usuarioSchema.methods.toSafeJSON = function toSafeJSON() {
+  const inativadoEm = this.inativadoEm || (!this.ativo ? this.updatedAt || this.createdAt || null : null);
   return {
     _id: this._id,
     nome: this.nome,
     email: this.email,
     papel: this.papel,
     ativo: this.ativo,
+    inativadoEm,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt
   };

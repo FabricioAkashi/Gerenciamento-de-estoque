@@ -111,6 +111,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(fornecedor)
     }),
+  removerFornecedor: (id) =>
+    request(`/fornecedores/${id}`, {
+      method: 'DELETE'
+    }),
   listarMovimentacoes: () => request('/movimentacoes?limit=500'),
   criarMovimentacao: (movimentacao) =>
     request('/movimentacoes', {

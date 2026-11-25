@@ -77,6 +77,35 @@ const usuarioInicial = {
   ativo: true,
   senhaConfirmacao: ''
 };
+const DIAS_REMOCAO_INATIVO = 60;
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+function obterTextoRemocaoInativo(usuario) {
+  if (!usuario || usuario.ativo) {
+    return null;
+  }
+
+  const referencia = usuario.inativadoEm || usuario.updatedAt || usuario.createdAt;
+  if (!referencia) {
+    return `Remove após ${DIAS_REMOCAO_INATIVO} dias`;
+  }
+
+  const dataInativacao = new Date(referencia);
+  if (Number.isNaN(dataInativacao.getTime())) {
+    return `Remove após ${DIAS_REMOCAO_INATIVO} dias`;
+  }
+
+  const expiracaoMs = dataInativacao.getTime() + DIAS_REMOCAO_INATIVO * MS_POR_DIA;
+  const diasRestantes = Math.ceil((expiracaoMs - Date.now()) / MS_POR_DIA);
+
+  if (diasRestantes <= 0) {
+    return 'Remoção hoje';
+  }
+  if (diasRestantes === 1) {
+    return 'Remove em 1 dia';
+  }
+  return `Remove em ${diasRestantes}d`;
+}
 
 function temaInicial() {
   if (typeof window === 'undefined') {
@@ -143,7 +172,7 @@ export default function App() {
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [usuarioForm, setUsuarioForm] = useState(usuarioInicial);
   const [usuarioEditando, setUsuarioEditando] = useState(null);
-  const [produtoParaRemover, setProdutoParaRemover] = useState(null);
+  const [itemParaRemover, setItemParaRemover] = useState(null);
   const [remocaoConfirmada, setRemocaoConfirmada] = useState(false);
   const [modalMovimentacaoAberto, setModalMovimentacaoAberto] = useState(false);
   const [isMobile, setIsMobile] = useState(
@@ -272,7 +301,7 @@ export default function App() {
     setFornecedores([]);
     setMovimentacoes([]);
     setUsuarios([]);
-    setProdutoParaRemover(null);
+    setItemParaRemover(null);
     setRemocaoConfirmada(false);
     setModalMovimentacaoAberto(false);
     setPainelCadastroAberto(false);
@@ -799,42 +828,60 @@ export default function App() {
     }
   }
 
-  function solicitarRemocaoProduto(item) {
+  function solicitarRemocaoItem(tipo, item) {
     setRemocaoConfirmada(false);
-    setProdutoParaRemover(item);
+    setItemParaRemover({ tipo, item });
   }
 
-  function fecharRemocaoProduto() {
+  function fecharRemocaoItem() {
     if (salvando) {
       return;
     }
 
-    setProdutoParaRemover(null);
+    setItemParaRemover(null);
     setRemocaoConfirmada(false);
   }
 
-  async function confirmarRemocaoProduto() {
-    if (!produtoParaRemover || salvando) {
+  async function confirmarRemocaoItem() {
+    if (!itemParaRemover || salvando) {
       return;
     }
 
-    const alvo = produtoParaRemover;
+    const alvo = itemParaRemover;
+    const ehFornecedor = alvo.tipo === 'fornecedor';
     setSalvando(true);
     setErro('');
     setMensagem('');
 
     try {
-      await api.removerProduto(alvo._id);
+      if (ehFornecedor) {
+        await api.removerFornecedor(alvo.item._id);
+      } else {
+        await api.removerProduto(alvo.item._id);
+      }
       setRemocaoConfirmada(true);
       await carregarDados();
-      setProdutoParaRemover(null);
+      if (ehFornecedor && fornecedorSelecionado?._id === alvo.item._id) {
+        setFornecedorSelecionado(null);
+      }
+      setItemParaRemover(null);
       setRemocaoConfirmada(false);
-      setMensagem('Produto removido do estoque.');
-      mostrarToast('success', 'Produto removido', `"${alvo.nome}" foi removido do estoque.`);
+      setMensagem(ehFornecedor ? 'Fornecedor removido.' : 'Produto removido do estoque.');
+      mostrarToast(
+        'success',
+        ehFornecedor ? 'Fornecedor removido' : 'Produto removido',
+        ehFornecedor
+          ? `"${alvo.item.nome}" foi removido da lista de fornecedores.`
+          : `"${alvo.item.nome}" foi removido do estoque.`
+      );
     } catch (error) {
       setRemocaoConfirmada(false);
       setErro(error.message);
-      mostrarToast('error', 'Erro ao remover produto', error.message);
+      mostrarToast(
+        'error',
+        ehFornecedor ? 'Erro ao remover fornecedor' : 'Erro ao remover produto',
+        error.message
+      );
     } finally {
       setSalvando(false);
     }
@@ -1601,7 +1648,7 @@ export default function App() {
                             label: 'Remover produto',
                             icon: <Trash2 size={15} />,
                             destructive: true,
-                            onSelect: () => solicitarRemocaoProduto(item)
+                            onSelect: () => solicitarRemocaoItem('produto', item)
                           }
                         ]
                       : [])
@@ -1667,7 +1714,7 @@ export default function App() {
                                 icon: <Trash2 size={15} />,
                                 destructive: true,
                                 separatorBefore: true,
-                                onSelect: () => solicitarRemocaoProduto(item)
+                                onSelect: () => solicitarRemocaoItem('produto', item)
                               }
                             ]}
                             label="Ações"
@@ -1819,7 +1866,18 @@ export default function App() {
                         setFiltrosProduto((atual) => ({ ...atual, fornecedor: item._id }));
                         rolarParaSecao('tabela-produtos');
                       }
-                    }
+                    },
+                    ...(admin
+                      ? [
+                          {
+                            id: 'remover',
+                            label: 'Remover fornecedor',
+                            icon: <Trash2 size={15} />,
+                            destructive: true,
+                            onSelect: () => solicitarRemocaoItem('fornecedor', item)
+                          }
+                        ]
+                      : [])
                   ]}
                   key={item._id}
                   label={`Opções para ${item.nome}`}
@@ -1867,6 +1925,7 @@ export default function App() {
           <div className="panel-header">
             <div>
               <h2>Usuários do sistema</h2>
+              <p className="panel-hint">Contas inativas são removidas automaticamente após 60 dias.</p>
             </div>
           </div>
 
@@ -2015,6 +2074,7 @@ export default function App() {
                     {usuariosFiltrados.map((item) => {
                       const totalMovUsuario =
                         movimentacoesPorUsuario.get(String(item.nome || '').trim().toLowerCase()) || 0;
+                      const textoRemocao = obterTextoRemocaoInativo(item);
                       return (
                       <ContextMenu
                         as="tr"
@@ -2045,9 +2105,19 @@ export default function App() {
                         </td>
                         <td className="cell-role" data-label="Perfil">{item.papel === 'admin' ? 'Admin' : 'Operador'}</td>
                         <td className="cell-status" data-label="Status">
-                          <span className={`status ${item.ativo ? 'ok' : 'danger'}`}>
-                            {item.ativo ? 'Ativo' : 'Inativo'}
-                          </span>
+                          <div className="user-status-stack">
+                            <span className={`status ${item.ativo ? 'ok' : 'danger'}`}>
+                              {item.ativo ? 'Ativo' : 'Inativo'}
+                            </span>
+                            {textoRemocao && (
+                              <span
+                                className="inactive-countdown"
+                                title="Contas inativas por mais de 60 dias são removidas automaticamente."
+                              >
+                                {textoRemocao}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="cell-user-movs col-num" data-label="Movimentações">
                           {numero(totalMovUsuario)}
@@ -2942,21 +3012,23 @@ export default function App() {
         </ModalDialog>
       )}
 
-      {produtoParaRemover && (
+      {itemParaRemover && (
         <ModalDialog
           className="delete-confirm-modal"
-          onClose={fecharRemocaoProduto}
-          titleId="produto-remocao-titulo"
+          onClose={fecharRemocaoItem}
+          titleId="item-remocao-titulo"
         >
           <div className="modal-header">
             <div>
-              <h2 id="produto-remocao-titulo">Remover produto</h2>
+              <h2 id="item-remocao-titulo">
+                {itemParaRemover.tipo === 'fornecedor' ? 'Remover fornecedor' : 'Remover produto'}
+              </h2>
             </div>
             <button
               aria-label="Fechar confirmação de remoção"
               className="icon-button modal-close"
               disabled={salvando}
-              onClick={fecharRemocaoProduto}
+              onClick={fecharRemocaoItem}
               title="Fechar"
               type="button"
             >
@@ -2965,32 +3037,38 @@ export default function App() {
           </div>
 
           <div className="delete-confirm-summary">
-            <strong>{produtoParaRemover.nome}</strong>
+            <strong>{itemParaRemover.item.nome}</strong>
             <span>
-              {produtoParaRemover.categoria?.nome || 'Sem categoria'} ·{' '}
-              {numero(produtoParaRemover.quantidadeAtual)} {produtoParaRemover.unidadeMedida}
+              {itemParaRemover.tipo === 'fornecedor'
+                ? itemParaRemover.item.email ||
+                  itemParaRemover.item.telefone ||
+                  itemParaRemover.item.cnpj ||
+                  'Sem contato informado'
+                : `${itemParaRemover.item.categoria?.nome || 'Sem categoria'} · ${numero(itemParaRemover.item.quantidadeAtual)} ${itemParaRemover.item.unidadeMedida}`}
             </span>
           </div>
 
           <p className="confirm-note delete-confirm-note">
-            Esta ação remove o item do catálogo ativo do estoque. Segure o botão abaixo para confirmar.
+            {itemParaRemover.tipo === 'fornecedor'
+              ? 'Esta ação remove o fornecedor caso não haja produtos ativos vinculados. Segure o botão abaixo para confirmar.'
+              : 'Esta ação remove o item do catálogo ativo do estoque. Segure o botão abaixo para confirmar.'}
           </p>
 
           <div className="delete-confirm-actions">
             <HoldToConfirm
-              key={produtoParaRemover._id}
+              key={`${itemParaRemover.tipo}-${itemParaRemover.item._id}`}
               confirmed={remocaoConfirmada}
               confirmedLabel="Removido"
               disabled={salvando}
               duration={1100}
               label="Segure para remover"
-              onConfirm={confirmarRemocaoProduto}
+              onConfirm={confirmarRemocaoItem}
               tone="danger"
             />
             <button
               className="secondary-button"
               disabled={salvando}
-              onClick={fecharRemocaoProduto}
+              onClick={fecharRemocaoItem}
               type="button"
             >
               Cancelar
